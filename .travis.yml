@@ -8,22 +8,25 @@ sudo: required
 services:
   - docker
 
-# We want OpenJDK 8 to be the default, but OpenJDK 10 and 11 are also available.
-# See https://docs.travis-ci.com/user/reference/bionic/#jvm-clojure-groovy-java-scala-support
-jdk:
-  - openjdk8
+jobs:
+  include:
+    - name: "JDK 8"
+      jdk: openjdk8
+      env: MVN_BUILD_SCRIPT="clean verify"
+    - name: "JDK 11 with Sonar analysis"
+      jdk: openjdk11
+      env: MVN_BUILD_SCRIPT="-Pcoverage clean verify sonar:sonar -Dsonar.projectKey=AxonFramework_extension-reactor"
 
 install: true
 
 cache:
   directories:
-  - $HOME/.m2
+    - $HOME/.m2
 
+# We switch JDK by setting the JAVA_HOME environment variable. All JDKs are under the same base directory.
 script:
   - mvn -version
-  - mvn -B -Pcoverage clean verify sonar:sonar -Dsonar.projectKey=AxonFramework_extension-reactor
-  - JAVA_HOME=$(dirname ${JAVA_HOME})/openjdk11 mvn -version
-  - JAVA_HOME=$(dirname ${JAVA_HOME})/openjdk11 mvn clean verify -B
+  - mvn -B -U $MVN_BUILD_SCRIPT
 
 notifications:
   slack:
