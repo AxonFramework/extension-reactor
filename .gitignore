@@ -4,6 +4,10 @@
 # Log file
 *.log
 
+# IntelliJ project files
+*.iml
+.idea/
+
 # BlueJ files
 *.ctxt
 
@@ -21,3 +25,12 @@
 
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
+
+# Eclipse project files
+.classpath
+.project
+.settings/
+.factorypath
+
+# MacOS makes this one
+.DS_Store
