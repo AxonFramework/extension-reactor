@@ -40,7 +40,7 @@ public class DefaultReactorEventGateway implements ReactorEventGateway {
     protected DefaultReactorEventGateway(Builder builder) {
         builder.validate();
         this.eventBus = builder.eventBus;
-        this.dispatchInterceptors = builder.dispatchInterceptors;
+        this.dispatchInterceptors = new CopyOnWriteArrayList<>(builder.dispatchInterceptors);
     }
 
     /**

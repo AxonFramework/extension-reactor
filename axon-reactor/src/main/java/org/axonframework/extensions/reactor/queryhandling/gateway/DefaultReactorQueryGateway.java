@@ -57,8 +57,8 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
     protected DefaultReactorQueryGateway(Builder builder) {
         builder.validate();
         this.queryBus = builder.queryBus;
-        this.dispatchInterceptors = builder.dispatchInterceptors;
-        this.resultInterceptors = builder.resultInterceptors;
+        this.dispatchInterceptors = new CopyOnWriteArrayList<>(builder.dispatchInterceptors);
+        this.resultInterceptors = new CopyOnWriteArrayList<>(builder.resultInterceptors);
     }
 
     /**

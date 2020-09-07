@@ -51,8 +51,8 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
         builder.validate();
         this.commandBus = builder.commandBus;
         this.retryScheduler = builder.retryScheduler;
-        this.dispatchInterceptors = builder.dispatchInterceptors;
-        this.resultInterceptors = builder.resultInterceptors;
+        this.dispatchInterceptors = new CopyOnWriteArrayList<>(builder.dispatchInterceptors);
+        this.resultInterceptors = new CopyOnWriteArrayList<>(builder.resultInterceptors);
     }
 
     /**
