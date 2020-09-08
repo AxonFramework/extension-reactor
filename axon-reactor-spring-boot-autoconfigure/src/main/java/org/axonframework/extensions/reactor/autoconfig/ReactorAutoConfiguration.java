@@ -17,7 +17,7 @@ import org.springframework.context.annotation.Bean;
  * Spring Boot Auto Configuration for Axon Framework Reactor extension.
  *
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 @ConditionalOnClass(name = "reactor.core.publisher.Mono")
 public class ReactorAutoConfiguration {

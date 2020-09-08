@@ -28,7 +28,7 @@ import static org.axonframework.common.BuilderUtils.assertNonNull;
  * Implementation of the {@link ReactorCommandGateway} that uses Project Reactor to achieve reactiveness.
  *
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 public class DefaultReactorCommandGateway implements ReactorCommandGateway {
 

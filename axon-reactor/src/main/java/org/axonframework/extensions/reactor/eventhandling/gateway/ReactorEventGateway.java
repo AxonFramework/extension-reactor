@@ -18,7 +18,7 @@ import java.util.List;
  * Reactor.
  *
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 public interface ReactorEventGateway extends ReactorMessageDispatchInterceptorSupport<EventMessage<?>> {
 
@@ -34,7 +34,7 @@ public interface ReactorEventGateway extends ReactorMessageDispatchInterceptorSu
      * registered to this {@code gateway}, they will be processed first, before returning events to the caller. The
      * order of returned events is the same as one provided as the input parameter.
      */
-    default Flux<Object> publish(Object... events) { // NOSONAR
+    default Flux<EventMessage<?>> publish(Object... events) { // NOSONAR
         return publish(Arrays.asList(events));
     }
 
@@ -50,7 +50,7 @@ public interface ReactorEventGateway extends ReactorMessageDispatchInterceptorSu
      * registered to this {@code gateway}, they will be processed first, before returning events to the caller. The
      * order of returned events is the same as one provided as the input parameter.
      */
-    Flux<Object> publish(List<?> events);
+    Flux<EventMessage<?>> publish(List<?> events);
 
     /**
      * Publishes the given {@code events} once the caller subscribes to the resulting {@link Flux}. Returns immediately.
@@ -64,7 +64,7 @@ public interface ReactorEventGateway extends ReactorMessageDispatchInterceptorSu
      * registered to this {@code gateway}, they will be processed first, before returning events to the caller. The
      * order of returned events is the same as one provided as the input parameter.
      */
-    default Flux<Object> publishAll(Publisher<?> events) {
+    default Flux<EventMessage<?>> publishAll(Publisher<?> events) {
         return Flux.from(events)
                    .concatMap(this::publish);
     }

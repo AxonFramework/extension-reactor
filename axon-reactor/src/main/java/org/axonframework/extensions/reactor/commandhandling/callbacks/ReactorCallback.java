@@ -14,7 +14,7 @@ import reactor.core.publisher.Mono;
  * being used.
  *
  * @author Stefan Dragisic
- * @since 4.4
+ * @since 4.4.2
  *
  * @see CommandCallback
  * @see org.axonframework.commandhandling.CommandBus

@@ -19,7 +19,7 @@ import java.util.function.Function;
  * Reactor.
  *
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 public interface ReactorCommandGateway extends ReactorMessageDispatchInterceptorSupport<CommandMessage<?>>,
         ReactorResultHandlerInterceptorSupport<CommandMessage<?>, CommandResultMessage<?>> {

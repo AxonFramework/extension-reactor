@@ -16,7 +16,7 @@ import java.util.LinkedList;
  * A stub of {@link CommandBus} that captures sent commands.
  *
  * @author Sara Pellegrini
- * @since 4.4
+ * @since 4.4.2
  */
 public class CommandBusStub implements CommandBus {
 

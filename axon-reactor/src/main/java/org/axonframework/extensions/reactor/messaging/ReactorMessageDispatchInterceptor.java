@@ -14,7 +14,7 @@ import java.util.function.BiFunction;
  *
  * @param <M> the message type this interceptor can process
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 @FunctionalInterface
 public interface ReactorMessageDispatchInterceptor<M extends Message<?>> extends MessageDispatchInterceptor<M> {

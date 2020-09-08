@@ -35,7 +35,7 @@ import static org.axonframework.messaging.GenericMessage.asMessage;
  * Implementation of the {@link ReactorQueryGateway} that uses Project Reactor to achieve reactiveness.
  *
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 public class DefaultReactorQueryGateway implements ReactorQueryGateway {
 

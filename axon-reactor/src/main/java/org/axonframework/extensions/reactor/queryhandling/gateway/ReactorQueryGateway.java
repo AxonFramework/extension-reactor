@@ -24,7 +24,7 @@ import java.util.function.Function;
  * from Project Reactor.
  *
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 public interface ReactorQueryGateway extends ReactorMessageDispatchInterceptorSupport<QueryMessage<?, ?>>,
         ReactorResultHandlerInterceptorSupport<QueryMessage<?, ?>, ResultMessage<?>> {

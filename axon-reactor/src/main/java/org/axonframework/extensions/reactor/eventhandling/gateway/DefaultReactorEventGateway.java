@@ -6,12 +6,10 @@ import org.axonframework.eventhandling.EventBus;
 import org.axonframework.eventhandling.EventMessage;
 import org.axonframework.eventhandling.GenericEventMessage;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
-import org.axonframework.messaging.Message;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static java.util.Arrays.asList;
@@ -21,7 +19,7 @@ import static org.axonframework.common.BuilderUtils.assertNonNull;
  * Implementation of the {@link ReactorEventGateway} that uses Project Reactor to achieve reactiveness.
  *
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 public class DefaultReactorEventGateway implements ReactorEventGateway {
 
@@ -57,12 +55,11 @@ public class DefaultReactorEventGateway implements ReactorEventGateway {
     }
 
     @Override
-    public Flux<Object> publish(List<?> events) {
+    public Flux<EventMessage<?>> publish(List<?> events) {
         return Flux.fromIterable(events)
                    .map(event -> Mono.<EventMessage<?>>just(GenericEventMessage.asEventMessage(event)))
                    .flatMap(this::processEventInterceptors)
-                   .flatMap(this::publishEvent)
-                   .transform(this::getPayload);
+                   .flatMap(this::publishEvent);
     }
 
     @Override
@@ -80,11 +77,6 @@ public class DefaultReactorEventGateway implements ReactorEventGateway {
     private Mono<EventMessage<?>> publishEvent(EventMessage<?> eventMessage) {
         return Mono.fromRunnable(() -> eventBus.publish(eventMessage))
                    .thenReturn(eventMessage);
-    }
-
-    private Flux<Object> getPayload(Flux<EventMessage<?>> eventMessage) {
-        return eventMessage.filter(r -> Objects.nonNull(r.getPayload()))
-                           .map(Message::getPayload);
     }
 
     /**

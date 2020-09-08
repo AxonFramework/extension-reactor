@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Unit tests for {@link DefaultReactorCommandGateway}.
  *
  * @author Sara Pellegrini
- * @since 4.4
+ * @since 4.4.2
  */
 class DefaultReactorCommandGatewayTest {
 

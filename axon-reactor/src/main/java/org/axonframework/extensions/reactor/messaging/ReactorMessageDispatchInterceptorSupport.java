@@ -9,7 +9,7 @@ import org.axonframework.messaging.Message;
  *
  * @param <M> The type of the message to be intercepted
  * @author Milan Savic
- * @since 4.4
+ * @since 4.4.2
  */
 public interface ReactorMessageDispatchInterceptorSupport<M extends Message<?>> {
 

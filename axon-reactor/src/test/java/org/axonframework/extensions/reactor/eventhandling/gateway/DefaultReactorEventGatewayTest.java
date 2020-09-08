@@ -3,6 +3,8 @@ package org.axonframework.extensions.reactor.eventhandling.gateway;
 import org.axonframework.eventhandling.EventBus;
 import org.axonframework.eventhandling.EventMessage;
 import org.axonframework.eventhandling.GenericEventMessage;
+import org.axonframework.messaging.Message;
+import org.axonframework.messaging.MetaData;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.*;
 import org.mockito.junit.jupiter.*;
@@ -39,7 +41,8 @@ class DefaultReactorEventGatewayTest {
 
     @Test
     void testPublish() {
-        Flux<Object> result = gateway.publish("event");
+        Flux<Object> result = gateway.publish("event")
+                                     .map(Message::getPayload);
         verifyNoMoreInteractions(eventBus);
 
         StepVerifier.create(result)
@@ -65,14 +68,16 @@ class DefaultReactorEventGatewayTest {
 
     @Test
     void testDispatchInterceptor() {
+        MetaData metaData = MetaData.with("key", "value");
         gateway.registerDispatchInterceptor(message -> message
-                .map(event -> GenericEventMessage.asEventMessage("intercepted" + event.getPayload())));
+                .map(event -> new GenericEventMessage<>("intercepted" + event.getPayload(), metaData)));
 
-        Flux<Object> result = gateway.publish("event");
+        Flux<EventMessage<?>> result = gateway.publish("event");
         verifyNoMoreInteractions(eventBus);
 
         StepVerifier.create(result)
-                    .expectNext("interceptedevent")
+                    .expectNextMatches(em -> "interceptedevent".equals(em.getPayload()) && metaData
+                            .equals(em.getMetaData()))
                     .verifyComplete();
         verify(eventBus).publish(any(EventMessage.class));
     }
@@ -82,7 +87,8 @@ class DefaultReactorEventGatewayTest {
         EventMessage<Object> event1 = GenericEventMessage.asEventMessage("event1");
         EventMessage<Object> event2 = GenericEventMessage.asEventMessage("event2");
 
-        Flux<Object> result = gateway.publish(event1, event2);
+        Flux<Object> result = gateway.publish(event1, event2)
+                                     .map(Message::getPayload);
         verifyNoMoreInteractions(eventBus);
 
         StepVerifier.create(result)
@@ -107,7 +113,8 @@ class DefaultReactorEventGatewayTest {
                 .when(eventBus)
                 .publish(any(EventMessage.class));
 
-        Flux<Object> result = gateway.publishAll(events);
+        Flux<Object> result = gateway.publishAll(events)
+                                     .map(Message::getPayload);
         verifyNoMoreInteractions(eventBus);
 
         List<Throwable> exceptions = new ArrayList<>(3);

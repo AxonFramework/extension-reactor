@@ -12,7 +12,7 @@ import reactor.core.publisher.Flux;
  * @param <M> The type of the message for which the result is going to be intercepted
  * @param <R> The type of the result to be intercepted
  * @author Sara Pellegrini
- * @since 4.4
+ * @since 4.4.2
  */
 @FunctionalInterface
 public interface ReactorResultHandlerInterceptor<M extends Message<?>, R extends ResultMessage<?>> {
