@@ -5,7 +5,7 @@
     <parent>
         <artifactId>axon-reactor-parent</artifactId>
         <groupId>org.axonframework.extensions.reactor</groupId>
-        <version>4.4-SNAPSHOT</version>
+        <version>4.4.2</version>
     </parent>
     <modelVersion>4.0.0</modelVersion>
 
