@@ -15,7 +15,8 @@
   ~ limitations under the License.
   -->
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 
     <groupId>org.axonframework.extensions.reactor</groupId>
     <artifactId>axon-reactor-parent</artifactId>
@@ -24,6 +25,8 @@
         <module>axon-reactor</module>
         <module>axon-reactor-spring-boot-autoconfigure</module>
         <module>axon-reactor-spring-boot-starter</module>
+        <module>event-store</module>
+
     </modules>
     <packaging>pom</packaging>
 
@@ -67,6 +70,11 @@
             <dependency>
                 <groupId>org.axonframework</groupId>
                 <artifactId>axon-messaging</artifactId>
+                <version>${axon.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.axonframework</groupId>
+                <artifactId>axon-eventsourcing</artifactId>
                 <version>${axon.version}</version>
             </dependency>
 
