@@ -1,10 +1,11 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.poc.uow.transaction;
 
 
 import reactor.core.publisher.Mono;
 
 /**
- * TODO DOC
+ * Interface of an object that represents a started transaction that can be committed or rolled back.
+ *
  * @author Stefan Dragisic
  */
 public interface ReactiveAxonTransaction {

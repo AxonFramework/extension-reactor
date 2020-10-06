@@ -1,5 +1,6 @@
 package org.axonframework.extensions.reactor.poc.uow;
 
+import org.axonframework.extensions.reactor.poc.uow.transaction.ReactiveAxonTransactionManager;
 import org.axonframework.messaging.Message;
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
@@ -12,7 +13,13 @@ import java.util.Optional;
 import java.util.function.Function;
 
 /**
- * TODO DOC
+ * This class represents a Unit of Work that monitors the processing of a {@link Message}.
+ * <p/>
+ * Before processing begins a Unit of Work is bound to the active subscription by registering it with the {@link
+ * ReactiveCurrentUnitOfWork}. After processing, the Unit of Work is unregistered from the {@link ReactiveCurrentUnitOfWork}.
+ * <p/>
+ * Handlers can be notified about the state of the processing of the Message by registering with this Unit of Work.
+ *
  * @author Stefan Dragisic
  */
 public interface ReactiveUnitOfWork<T extends Message<?>> {

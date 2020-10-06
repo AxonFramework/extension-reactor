@@ -15,7 +15,8 @@ import java.util.*;
 import java.util.function.Function;
 
 /**
- * TODO DOC
+ * Abstract implementation of the Reactor Unit of Work. It provides default implementations of all methods related to the
+ * processing of a Message.
  *
  * @author Stefan Dragisic
  */
@@ -32,7 +33,7 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
     public Mono<Void> start() {
         return Mono.fromRunnable(() -> {
             if (logger.isDebugEnabled()) {
-                logger.debug("Starting Reactive Unit Of Work");
+                logger.debug("Starting Unit Of Work");
             }
             Assert.state(ReactiveUnitOfWork.Phase.NOT_STARTED.equals(phase()), () -> "UnitOfWork is already started");
             rolledBack = false;

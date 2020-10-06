@@ -2,6 +2,7 @@ package org.axonframework.extensions.reactor.poc.uow;
 
 import org.axonframework.commandhandling.GenericCommandMessage;
 import org.axonframework.eventhandling.GenericEventMessage;
+import org.axonframework.extensions.reactor.poc.uow.transaction.ReactiveSpringTransactionManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.ReactiveTransaction;
@@ -22,10 +23,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * TODO DOC
+ * Tests for ReactiveDefaultUnitOfWork
  * @author Stefan Dragisic
  */
-class DefaultUnitOfWorkTest {
+class ReactiveDefaultUnitOfWorkTest {
 
     GenericEventMessage<String> genericEventMessage = new GenericEventMessage<>("Event 1");
     GenericCommandMessage<String> genericCommandMessage = new GenericCommandMessage<>("Command 1");

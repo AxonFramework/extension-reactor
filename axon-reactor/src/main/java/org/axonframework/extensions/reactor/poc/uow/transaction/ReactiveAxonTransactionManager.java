@@ -1,4 +1,4 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.poc.uow.transaction;
 
 /*
  * Copyright (c) 2010-2018. Axon Framework
@@ -21,7 +21,9 @@ import org.axonframework.common.transaction.Transaction;
 import reactor.core.publisher.Mono;
 
 /**
- * TODO DOC
+ * Interface towards a mechanism that manages transactions
+ * <p/>
+ * Typically, this will involve opening database transactions or connecting to external systems.t
  *
  * @author Stefan Dragisic
  */

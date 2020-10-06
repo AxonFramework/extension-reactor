@@ -3,7 +3,8 @@ package org.axonframework.extensions.reactor.poc.uow;
 import java.util.LinkedList;
 
 /**
- * TODO DOC
+ * Type Alias for list of Unit of Works
+ *
  * @author Stefan Dragisic
  */
-public class TransactionContext extends LinkedList<ReactiveUnitOfWork<?>> { }
+public class ExecutionContext extends LinkedList<ReactiveUnitOfWork<?>> { }

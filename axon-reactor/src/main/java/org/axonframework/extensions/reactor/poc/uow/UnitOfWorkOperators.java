@@ -1,16 +1,16 @@
 package org.axonframework.extensions.reactor.poc.uow;
 
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 /**
- * TODO DOC
+ * Helper method that wraps pipeline into single execution context that is shared between Unit of Works
+ *
  * @author Stefan Dragisic
  */
 public interface UnitOfWorkOperators {
 
     static <T> Mono<T> executionContext(Mono<T> pipeline) {
-        return pipeline.subscriberContext(ReactiveCurrentUnitOfWork.initializeTransactionContext());
+        return pipeline.subscriberContext(ReactiveCurrentUnitOfWork.initializeExecutionContext());
     }
 
 }

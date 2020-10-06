@@ -3,6 +3,7 @@ package org.axonframework.extensions.reactor.poc.uow;
 import org.axonframework.common.Assert;
 import org.axonframework.messaging.Message;
 import org.axonframework.messaging.unitofwork.ExecutionResult;
+import org.axonframework.messaging.unitofwork.UnitOfWork;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -14,7 +15,9 @@ import java.util.LinkedList;
 import java.util.function.Function;
 
 /**
- * TODO DOC
+ * Maintains the context around the processing of a single Message. This class notifies handlers when the Unit of Work
+ * processing the Message transitions to a new {@link ReactiveUnitOfWork.Phase}.
+ *
  * @author Stefan Dragisic
  */
 public class ReactiveMessageProcessingContext<T extends Message<?>> {

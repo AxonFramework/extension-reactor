@@ -13,7 +13,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * TODO DOC
+ * Tests for ReactiveCurrentUnitOfWork
  * @author Stefan Dragisic
  */
 @SuppressWarnings({"rawtypes","unchecked"})

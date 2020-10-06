@@ -2,7 +2,6 @@ package org.axonframework.extensions.reactor.poc.uow;
 
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.unitofwork.UnitOfWork;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.context.Context;
 
@@ -10,7 +9,9 @@ import java.util.Deque;
 import java.util.function.Function;
 
 /**
- * TODO DOC
+ * Default entry point to gain access to the current UnitOfWork. Components managing transactional boundaries can
+ * register and clear UnitOfWork instances, which components can use.
+ *
  * @author Stefan Dragisic
  */
 public abstract class ReactiveCurrentUnitOfWork {
@@ -18,10 +19,10 @@ public abstract class ReactiveCurrentUnitOfWork {
     private ReactiveCurrentUnitOfWork() {
     }
 
-    public static Mono<TransactionContext> currentContext() {
+    public static Mono<ExecutionContext> currentContext() {
         return Mono.subscriberContext().handle((ctx, sink) -> {
-            if (ctx.hasKey(TransactionContext.class)) {
-                sink.next(ctx.get(TransactionContext.class));
+            if (ctx.hasKey(ExecutionContext.class)) {
+                sink.next(ctx.get(ExecutionContext.class));
             } else {
                 sink.error(new IllegalStateException("No TransactionContext is currently found for this subscription."));
             }
@@ -107,27 +108,27 @@ public abstract class ReactiveCurrentUnitOfWork {
      */
     public static Function<Context, Context> set(ReactiveUnitOfWork<?> unitOfWork) {
         return ctx -> {
-            if (ctx.hasKey(TransactionContext.class)) {
-                ctx.get(TransactionContext.class).push(unitOfWork);
+            if (ctx.hasKey(ExecutionContext.class)) {
+                ctx.get(ExecutionContext.class).push(unitOfWork);
                 return ctx;
             }
-            TransactionContext transactionContext = new TransactionContext();
-            transactionContext.push(unitOfWork);
-            return ctx.put(TransactionContext.class, transactionContext);
+            ExecutionContext executionContext = new ExecutionContext();
+            executionContext.push(unitOfWork);
+            return ctx.put(ExecutionContext.class, executionContext);
         };
     }
 
     /**
-     * Creates execution context
-     * todo
+     * Creates shared execution context that Subscribers
+     * will access to retrieve Current Unit of Work
      */
-    public static Function<Context, Context> initializeTransactionContext() {
+    public static Function<Context, Context> initializeExecutionContext() {
         return ctx -> {
-            if (ctx.hasKey(TransactionContext.class)) {
-                ctx.delete(TransactionContext.class);
+            if (ctx.hasKey(ExecutionContext.class)) {
+                ctx.delete(ExecutionContext.class);
             }
-            TransactionContext transactionContext = new TransactionContext();
-            return ctx.put(TransactionContext.class, transactionContext);
+            ExecutionContext executionContext = new ExecutionContext();
+            return ctx.put(ExecutionContext.class, executionContext);
         };
     }
 
@@ -143,11 +144,13 @@ public abstract class ReactiveCurrentUnitOfWork {
         return isStarted()
                 .filter(Boolean::booleanValue)
                 .flatMap(it -> currentContext())
-                .doOnNext(deq -> {
+                .flatMap(deq -> {
                             if (deq.peek() == unitOfWork) {
                                 deq.pop();
+                                return Mono.empty();
                             } else {
-                                throw new IllegalStateException("Could not clear this UnitOfWork.It is not the active one.");
+                               return Mono.error(
+                                       new IllegalStateException("Could not clear this UnitOfWork.It is not the active one."));
                             }
                         }
                 )

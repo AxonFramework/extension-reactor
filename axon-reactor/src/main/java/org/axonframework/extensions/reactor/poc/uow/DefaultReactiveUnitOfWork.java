@@ -13,7 +13,8 @@ import java.util.function.Function;
 import static org.axonframework.messaging.GenericResultMessage.asResultMessage;
 
 /**
- * TODO DOC
+ * Implementation of the UnitOfWork that processes a single message.
+ *
  * @author Stefan Dragisic
  */
 public class DefaultReactiveUnitOfWork<T extends Message<?>> extends AbstractReactiveUnitOfWork<T> {
@@ -33,8 +34,8 @@ public class DefaultReactiveUnitOfWork<T extends Message<?>> extends AbstractRea
      * Starts a new DefaultUnitOfWork instance, registering it a CurrentUnitOfWork. This methods returns the started
      * UnitOfWork instance.
      * <p>
-     * Note that this Unit Of Work type is not meant to be shared among different Threads. A single DefaultUnitOfWork
-     * instance should be used exclusively by the Thread that created it.
+     * Note that this Unit Of Work type is not meant to be shared among different Subscriber. A single DefaultUnitOfWork
+     * instance should be used exclusively by the Subscriber that created it.
      *
      * @param message the message that will be processed in the context of the unit of work
      * @return the started UnitOfWork instance
