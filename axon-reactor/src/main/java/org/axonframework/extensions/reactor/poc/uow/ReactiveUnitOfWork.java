@@ -91,7 +91,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      *
      * @param handler the handler to register with the Unit of Work
      */
-    void onPrepareCommit(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler);
+    void onPrepareCommit(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
 
     /**
      * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
@@ -99,7 +99,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      *
      * @param handler the handler to register with the Unit of Work
      */
-    void onCommit(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler);
+    void onCommit(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
 
     /**
      * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
@@ -107,7 +107,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      *
      * @param handler the handler to register with the Unit of Work
      */
-    void afterCommit(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler);
+    void afterCommit(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
 
     /**
      * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
@@ -116,7 +116,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      *
      * @param handler the handler to register with the Unit of Work
      */
-    void onRollback(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler);
+    void onRollback(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
 
     /**
      * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
@@ -124,7 +124,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      *
      * @param handler the handler to register with the Unit of Work
      */
-    void onCleanup(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler);
+    void onCleanup(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
 
     /**
      * Returns an optional for the parent of this Unit of Work. The optional holds the Unit of Work that was active when
@@ -255,7 +255,9 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
                 .doOnNext(transaction -> {
                     onCommit(u -> transaction.commit());
                     onRollback(u -> transaction.rollback());
-                }).then();
+                })
+                .onErrorResume(t-> rollback(t).then(Mono.error(t)))
+                .then();
     }
 
     /**
@@ -284,8 +286,12 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      *                              execution fails
      */
     default Mono<Void> execute(Mono<Void> task, RollbackConfiguration rollbackConfiguration) {
-        return executeWithResult(task, rollbackConfiguration).then();
-
+        return executeWithResult(task, rollbackConfiguration)
+                .flatMap(result -> {
+                    if (result.isExceptional()) {
+                        return Mono.error(new RuntimeException(result.exceptionResult()));
+                    } else return Mono.empty();
+                }).then();
     }
 
     /**

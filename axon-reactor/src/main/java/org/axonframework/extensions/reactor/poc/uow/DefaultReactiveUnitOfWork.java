@@ -89,7 +89,7 @@ public class DefaultReactiveUnitOfWork<T extends Message<?>> extends AbstractRea
     }
 
     @Override
-    protected void addHandler(ReactiveUnitOfWork.Phase phase, Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler) {
+    protected void addHandler(ReactiveUnitOfWork.Phase phase, Function<ReactiveUnitOfWork<T>, Mono<Void>> handler) {
         Assert.state(!phase.isBefore(phase()), () -> "Cannot register a listener for phase: " + phase
                 + " because the Unit of Work is already in a later phase: " + phase());
         processingContext.addHandler(phase, handler);

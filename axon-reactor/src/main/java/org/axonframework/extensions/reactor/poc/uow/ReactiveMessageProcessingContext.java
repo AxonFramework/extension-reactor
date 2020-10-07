@@ -26,7 +26,7 @@ public class ReactiveMessageProcessingContext<T extends Message<?>> {
     @SuppressWarnings("MismatchedQueryAndUpdateOfCollection")
     private static final Deque EMPTY = new LinkedList<>();
 
-    private final EnumMap<ReactiveUnitOfWork.Phase, Deque<Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>>>> handlers = new EnumMap<>(ReactiveUnitOfWork.Phase.class);
+    private final EnumMap<ReactiveUnitOfWork.Phase, Deque<Function<ReactiveUnitOfWork<T>, Mono<Void>>>> handlers = new EnumMap<>(ReactiveUnitOfWork.Phase.class);
     private T message;
     private ExecutionResult executionResult;
 
@@ -50,12 +50,11 @@ public class ReactiveMessageProcessingContext<T extends Message<?>> {
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Notifying handlers for phase {}", phase.toString());
         }
-        Mono<ReactiveUnitOfWork<T>> uowMono = Mono.just(unitOfWork);
 
         return Mono.fromCallable(() ->
-                (Deque<Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>>>) handlers.getOrDefault(phase, EMPTY))
+                (Deque<Function<ReactiveUnitOfWork<T>, Mono<Void>>>) handlers.getOrDefault(phase, EMPTY))
                 .flatMapIterable(Function.identity())
-                .concatMap(handler -> handler.apply(uowMono))
+                .concatMap(handler -> handler.apply(unitOfWork))
                 .then();
     }
 
@@ -66,11 +65,11 @@ public class ReactiveMessageProcessingContext<T extends Message<?>> {
      * @param phase   The phase of the unit of work to attach the handler to
      * @param handler The handler to invoke in the given phase
      */
-    public void addHandler(ReactiveUnitOfWork.Phase phase, Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler) {
+    public void addHandler(ReactiveUnitOfWork.Phase phase, Function<ReactiveUnitOfWork<T>, Mono<Void>> handler) {
         if (LOGGER.isDebugEnabled()) {
             LOGGER.debug("Adding handler {} for phase {}", handler.getClass().getName(), phase.toString());
         }
-        final Deque<Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>>> consumers = handlers.computeIfAbsent(phase, p -> new ArrayDeque<>());
+        final Deque<Function<ReactiveUnitOfWork<T>, Mono<Void>>> consumers = handlers.computeIfAbsent(phase, p -> new ArrayDeque<>());
         if (phase.isReverseCallbackOrder()) {
             consumers.addFirst(handler);
         } else {

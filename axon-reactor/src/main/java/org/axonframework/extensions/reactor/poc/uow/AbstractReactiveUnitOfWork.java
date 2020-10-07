@@ -39,17 +39,15 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
             rolledBack = false;
             onRollback(u -> Mono.fromRunnable(() -> rolledBack = true));
         })
-                .then(ReactiveCurrentUnitOfWork.ifStarted(parentMono ->
-                        parentMono.doOnNext(parent ->
+                .then(ReactiveCurrentUnitOfWork.ifStarted(parent ->
                                 Mono.fromRunnable(() -> {
                                     // we're nesting.
                                     this.parentUnitOfWork = parent;
-                                    //todo root() instead of parent
-                                    parent.onCleanup(r -> changePhase(Phase.CLEANUP, Phase.CLOSED));
-                                }))
-                                .then(changePhase(ReactiveUnitOfWork.Phase.STARTED))
+                                    root().onCleanup(r -> changePhase(Phase.CLEANUP, Phase.CLOSED));
+                                })
                 ))
-                .subscriberContext(ReactiveCurrentUnitOfWork.set(this))
+                .then(changePhase(ReactiveUnitOfWork.Phase.STARTED))
+                .then(ReactiveCurrentUnitOfWork.set(this))
                 .then();
     }
 
@@ -78,23 +76,27 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
 
     private Mono<Void> commitAsRoot() {
         return changePhase(ReactiveUnitOfWork.Phase.PREPARE_COMMIT, ReactiveUnitOfWork.Phase.COMMIT)
-                .then(Mono.defer(() -> (phase() == Phase.COMMIT) ?
-                        changePhase(Phase.AFTER_COMMIT) : Mono.empty()))
-                .then(changePhase(ReactiveUnitOfWork.Phase.CLEANUP, ReactiveUnitOfWork.Phase.CLOSED))
                 .onErrorResume(t -> {
                     setRollbackCause(t);
                     return changePhase(
-                            ReactiveUnitOfWork.Phase.ROLLBACK,
-                            ReactiveUnitOfWork.Phase.CLEANUP,
-                            ReactiveUnitOfWork.Phase.CLOSED)
+                            ReactiveUnitOfWork.Phase.ROLLBACK)
                             .and(Mono.error(t));
-                });
+                })
+                .then(Mono.defer(()-> {
+                    if (phase() == Phase.COMMIT) {
+                        return changePhase(Phase.AFTER_COMMIT);
+                    } else return Mono.empty();
+                }))
+                .then(changePhase(ReactiveUnitOfWork.Phase.CLEANUP, ReactiveUnitOfWork.Phase.CLOSED))
+                .onErrorResume(t ->
+                        changePhase(Phase.CLEANUP, Phase.CLOSED)
+                        .and(Mono.error(t)));
     }
 
     private Mono<Void> commitAsNested() {
         return changePhase(ReactiveUnitOfWork.Phase.PREPARE_COMMIT, ReactiveUnitOfWork.Phase.COMMIT)
-                .then(delegateAfterCommitToParent(this)
-                        .and(Mono.fromRunnable(() -> parentUnitOfWork.onRollback(u -> changePhase(Phase.ROLLBACK)))))
+                .then(delegateAfterCommitToParent(this))
+                .and(Mono.fromRunnable(() -> parentUnitOfWork.onRollback(u -> changePhase(Phase.ROLLBACK))))
                 .onErrorResume(t -> {
                     setRollbackCause(t);
                     return changePhase(ReactiveUnitOfWork.Phase.ROLLBACK)
@@ -104,14 +106,15 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
 
 
     private Mono<Void> delegateAfterCommitToParent(ReactiveUnitOfWork<?> reactiveUnitOfWorkMono) {
-        Optional<ReactiveUnitOfWork<?>> parent = reactiveUnitOfWorkMono.parent();
-        if (parent.isPresent()) {
-            parent.get().afterCommit(u -> Mono.fromRunnable(() -> delegateAfterCommitToParent(parent.get())));
-            return Mono.empty();
-        } else {
-            return changePhase(ReactiveUnitOfWork.Phase.AFTER_COMMIT);
-        }
-
+        return Mono.defer(()->{
+            Optional<ReactiveUnitOfWork<?>> parent = reactiveUnitOfWorkMono.parent();
+            if (parent.isPresent()) {
+                parent.get().afterCommit(this::delegateAfterCommitToParent);
+                return Mono.empty();
+            } else {
+                return changePhase(ReactiveUnitOfWork.Phase.AFTER_COMMIT);
+            }
+        });
     }
 
     @Override
@@ -182,31 +185,31 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
 
 
     @Override
-    public void onPrepareCommit(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler) {
+    public void onPrepareCommit(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler) {
         addHandler(ReactiveUnitOfWork.Phase.PREPARE_COMMIT, handler);
     }
 
     @Override
-    public void onCommit(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler) {
+    public void onCommit(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler) {
         addHandler(ReactiveUnitOfWork.Phase.COMMIT, handler);
     }
 
     @Override
-    public void afterCommit(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler) {
+    public void afterCommit(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler) {
         addHandler(Phase.AFTER_COMMIT, handler);
     }
 
     @Override
-    public void onRollback(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler) {
+    public void onRollback(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler) {
         addHandler(Phase.ROLLBACK, handler);
     }
 
     @Override
-    public void onCleanup(Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler) {
+    public void onCleanup(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler) {
         addHandler(Phase.CLEANUP, handler);
     }
 
-    protected abstract void addHandler(ReactiveUnitOfWork.Phase phase, Function<Mono<ReactiveUnitOfWork<T>>, Mono<Void>> handler);
+    protected abstract void addHandler(ReactiveUnitOfWork.Phase phase, Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
 
     /**
      * Overwrite the current phase with the given {@code phase}.

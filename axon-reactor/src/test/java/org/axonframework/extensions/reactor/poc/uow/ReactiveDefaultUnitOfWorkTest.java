@@ -1,8 +1,12 @@
 package org.axonframework.extensions.reactor.poc.uow;
 
 import org.axonframework.commandhandling.GenericCommandMessage;
+import org.axonframework.common.transaction.Transaction;
+import org.axonframework.common.transaction.TransactionManager;
 import org.axonframework.eventhandling.GenericEventMessage;
 import org.axonframework.extensions.reactor.poc.uow.transaction.ReactiveSpringTransactionManager;
+import org.axonframework.messaging.unitofwork.CurrentUnitOfWork;
+import org.axonframework.messaging.unitofwork.UnitOfWork;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.ReactiveTransaction;
@@ -16,14 +20,16 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
  * Tests for ReactiveDefaultUnitOfWork
+ *
  * @author Stefan Dragisic
  */
 class ReactiveDefaultUnitOfWorkTest {
@@ -54,6 +60,7 @@ class ReactiveDefaultUnitOfWorkTest {
     @Test
     void ouwIsActiveAfterStart() {
         DefaultReactiveUnitOfWork.startAndGet(genericEventMessage)
+                .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .assertNext(ReactiveUnitOfWork::isActive)
                 .verifyComplete();
@@ -83,15 +90,7 @@ class ReactiveDefaultUnitOfWorkTest {
 
     @Test
     void commit() {
-        List<Mono<DefaultReactiveUnitOfWork<GenericEventMessage<String>>>> uows =
-                Arrays.asList(
-                        DefaultReactiveUnitOfWork.startAndGet(genericEventMessage),
-                        DefaultReactiveUnitOfWork.startAndGet(genericEventMessage),
-                        DefaultReactiveUnitOfWork.startAndGet(genericEventMessage)
-                );
-
-        Flux.fromIterable(uows)
-                .flatMap(Function.identity())
+        DefaultReactiveUnitOfWork.startAndGet(genericEventMessage)
                 .flatMap(ReactiveUnitOfWork::commit)
                 .then(ReactiveCurrentUnitOfWork.isEmpty())
                 .as(UnitOfWorkOperators::executionContext)
@@ -124,7 +123,8 @@ class ReactiveDefaultUnitOfWorkTest {
 
     @Test
     void executeWithResult() {
-        Mono<String> monoTask = Mono.fromCallable(() -> "executed");
+        Mono<String> monoTask = Mono.fromCallable(() -> "executed")
+                .delaySubscription(Duration.ofSeconds(1));
 
         DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
                 .flatMap(uow -> uow.executeWithResult(monoTask))
@@ -162,6 +162,20 @@ class ReactiveDefaultUnitOfWorkTest {
     }
 
     @Test
+    void attachedTransactionRolledBackOnUnitOfWorkRollBack() {
+        Mono.just(new DefaultReactiveUnitOfWork<>(genericCommandMessage)) // create uow
+                .flatMap(uow -> uow.attachTransaction(reactiveSpringTransactionManager).then(Mono.just(uow))) // attach transaction
+                .flatMap(uow -> uow.start().then(uow.rollback()))
+                .as(UnitOfWorkOperators::executionContext)
+                .as(StepVerifier::create)
+                .verifyComplete();
+
+
+        verify(reactiveTransactionManagerMock, times(0)).commit(any());
+        verify(reactiveTransactionManagerMock, times(1)).rollback(any());
+    }
+
+    @Test
     void attachTransactionFull() {
         String payload = "executed";
         Mono<String> monoTask = Mono.fromCallable(() -> payload)
@@ -195,6 +209,49 @@ class ReactiveDefaultUnitOfWorkTest {
 
         verify(reactiveTransactionManagerMock, times(0)).commit(any());
         verify(reactiveTransactionManagerMock, times(1)).rollback(any());
+    }
+
+    @Test
+    void unitOfWorkIsRolledBackWhenTransactionFailsToStart() {
+        AtomicBoolean onRollback = new AtomicBoolean();
+
+        when(reactiveSpringTransactionManager.startTransaction()).thenReturn(Mono.error(IllegalStateException::new));
+
+        DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
+                .doOnNext(uow -> uow.onRollback(u -> Mono.fromRunnable(() -> onRollback.set(true))))
+                .flatMap(uow -> uow.attachTransaction(reactiveSpringTransactionManager))
+                .as(UnitOfWorkOperators::executionContext)
+                .as(StepVerifier::create)
+                .expectError(IllegalStateException.class)
+                .verify();
+
+
+        assertTrue(onRollback.get());
+    }
+
+    @Test
+    void testHandlersForCurrentPhaseAreExecuted() {
+        AtomicBoolean prepareCommit = new AtomicBoolean();
+        AtomicBoolean commit = new AtomicBoolean();
+        AtomicBoolean afterCommit = new AtomicBoolean();
+        AtomicBoolean cleanup = new AtomicBoolean();
+
+        DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
+                .doOnNext(uow -> {
+                    uow.onPrepareCommit(u -> Mono.fromRunnable(() -> prepareCommit.set(true)));
+                    uow.onCommit(u -> Mono.fromRunnable(() -> commit.set(true)));
+                    uow.afterCommit(u -> Mono.fromRunnable(() -> afterCommit.set(true)));
+                    uow.onCleanup(u -> Mono.fromRunnable(() -> cleanup.set(true)));
+                })
+                .flatMap(AbstractReactiveUnitOfWork::commit)
+                .as(UnitOfWorkOperators::executionContext)
+                .as(StepVerifier::create)
+                .verifyComplete();
+
+        assertTrue(prepareCommit.get());
+        assertTrue(commit.get());
+        assertTrue(afterCommit.get());
+        assertTrue(cleanup.get());
     }
 
 }

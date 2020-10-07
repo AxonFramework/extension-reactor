@@ -49,10 +49,11 @@ public abstract class ReactiveCurrentUnitOfWork {
      * @param consumer The consumer to invoke if a Unit of Work is active
      * @return {@code true} if a unit of work is active, {@code false} otherwise
      */
-    public static Mono<Boolean> ifStarted(Function<Mono<ReactiveUnitOfWork<?>>, Mono<?>> consumer) {
+    public static Mono<Boolean> ifStarted(Function<ReactiveUnitOfWork<?>, Mono<?>> consumer) {
         return isStarted()
                 .filter(Boolean::booleanValue)
-                .flatMap(unused -> consumer.apply((Mono<ReactiveUnitOfWork<?>>) get()).thenReturn(Boolean.TRUE))
+                .flatMap(unused-> get())
+                .flatMap(uow -> consumer.apply(uow).thenReturn(Boolean.TRUE))
                 .defaultIfEmpty(Boolean.FALSE);
     }
 
@@ -106,16 +107,11 @@ public abstract class ReactiveCurrentUnitOfWork {
      *
      * @param unitOfWork The UnitOfWork to bind to the current thread.
      */
-    public static Function<Context, Context> set(ReactiveUnitOfWork<?> unitOfWork) {
-        return ctx -> {
-            if (ctx.hasKey(ExecutionContext.class)) {
-                ctx.get(ExecutionContext.class).push(unitOfWork);
-                return ctx;
-            }
-            ExecutionContext executionContext = new ExecutionContext();
-            executionContext.push(unitOfWork);
-            return ctx.put(ExecutionContext.class, executionContext);
-        };
+    public static Mono<ReactiveUnitOfWork> set(ReactiveUnitOfWork<?> unitOfWork) {
+        return currentContext()
+                .doOnNext(deq-> {
+                    deq.push(unitOfWork);
+                }).then(Mono.just(unitOfWork));
     }
 
     /**
