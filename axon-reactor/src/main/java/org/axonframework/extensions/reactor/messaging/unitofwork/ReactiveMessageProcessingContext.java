@@ -54,7 +54,17 @@ public class ReactiveMessageProcessingContext<T extends Message<?>> {
         return Mono.fromCallable(() ->
                 (Deque<Function<ReactiveUnitOfWork<T>, Mono<Void>>>) handlers.getOrDefault(phase, EMPTY))
                 .flatMapIterable(Function.identity())
-                .concatMap(handler -> handler.apply(unitOfWork))
+                .concatMap(handler -> handler.apply(unitOfWork)
+                        .onErrorResume(t->
+                                Mono.defer(()-> {
+                                    if (phase.isSuppressHandlerErrors()) {
+                                        LOGGER.info("An error occurred while executing a lifecycle phase handler for phase {}", phase, t);
+                                        return Mono.empty();
+                                    } else {
+                                        return Mono.error(t);
+                                    }
+                                })
+                        ))
                 .then();
     }
 

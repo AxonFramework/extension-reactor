@@ -94,14 +94,14 @@ public class BatchingReactiveUnitOfWork<T extends Message<?>> extends AbstractRe
                          } else {
                              cause = t;
                          }
-                         return Mono.just(asResultMessage(t));
+                         return Mono.just(asResultMessage(cause));
 
                     })
                 ))
                 .doOnNext(resultMessage -> setExecutionResult(new ExecutionResult(resultMessage)))
                 .last()
-                .flatMap(resultMessage -> commit().then(Mono.just(resultMessage)))
-                .onErrorResume(t ->Mono.just(asResultMessage(t)));
+                .flatMap(resultMessage -> commit().thenReturn(resultMessage))
+                .onErrorResume(t -> Mono.just(asResultMessage(t)));
     }
 
     /**
