@@ -17,6 +17,6 @@ public interface UnitOfWorkOperators {
         return pipeline.subscriberContext(ReactiveCurrentUnitOfWork.initializeExecutionContext());
     }
 
-    //todo runOnAfterCommitOrNow... and other operators
+    //todo runOnAfterCommitOrNow, runOnPrepareCommitOrNow ... generic operators
 
 }

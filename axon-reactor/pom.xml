@@ -74,7 +74,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!--        todo remove  -->
+        <!--        todo remove where it belongs  -->
         <dependency>
             <groupId>org.springframework</groupId>
             <artifactId>spring-tx</artifactId>

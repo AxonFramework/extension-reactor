@@ -420,7 +420,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      * @return {@code true} if the Unit of Work is the currently active Unit of Work
      */
     default Mono<Boolean> isCurrent() {
-        return ReactiveCurrentUnitOfWork.isStarted()//todo ifStartedGet
+        return ReactiveCurrentUnitOfWork.isStarted()
                 .zipWith(ReactiveCurrentUnitOfWork.get())
                 .map(tuple -> tuple.getT1() && tuple.getT2() == this);
     }
