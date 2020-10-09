@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010-2020. Axon Framework
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.eventhandling.GenericEventMessage;
@@ -185,10 +201,10 @@ public class NestedReactiveUnitOfWorkTest {
                 Mono.when(inner.start())
                         .then(Mono.fromRunnable(()->{
                             inner.onCommit(uow-> Mono.error(new MockException()));
-                            inner.onCommit(uow -> Mono.fromRunnable(() ->
+                            inner.onCommitRun(uow ->
                                     phaseTransitions.add(
                                             new PhaseTransition(uow, ReactiveUnitOfWork.Phase.COMMIT, "x")
-                                    )));
+                                    ));
                         }))
                         .then(inner.commit())
                         .onErrorResume(t->Mono.empty())

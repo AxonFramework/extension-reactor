@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010-2020. Axon Framework
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 
@@ -10,7 +26,6 @@ import org.axonframework.messaging.unitofwork.RollbackConfiguration;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -21,18 +36,18 @@ import static org.axonframework.messaging.GenericResultMessage.asResultMessage;
  * Unit of Work implementation that is able to process a batch of Messages instead of just a single Message.
  *
  * @param <T> The type of message handled by this Unit of Work
+ *
  * @author Stefan Dragisic
  * @author Allard Buijze
- * @since
  */
 public class BatchingReactiveUnitOfWork<T extends Message<?>> extends AbstractReactiveUnitOfWork<T> {
 
     private final List<ReactiveMessageProcessingContext<T>> processingContexts;
-    private ReactiveMessageProcessingContext<T> processingContext;
     Throwable cause = null;
+    private ReactiveMessageProcessingContext<T> processingContext;
 
     /**
-     * Initializes a BatchingUnitOfWork for processing the given batch of {@code messages}.
+     * Initializes a BatchingReactiveUnitOfWork for processing the given batch of {@code messages}.
      *
      * @param messages batch of messages to process
      */
@@ -52,9 +67,6 @@ public class BatchingReactiveUnitOfWork<T extends Message<?>> extends AbstractRe
         processingContext = processingContexts.get(0);
     }
 
-    //todo Flux version
-
-
     /**
      * {@inheritDoc}
      * <p>
@@ -64,44 +76,54 @@ public class BatchingReactiveUnitOfWork<T extends Message<?>> extends AbstractRe
      */
     @Override
     public <R> Mono<ResultMessage<R>> executeWithResult(Mono<R> executeTask, RollbackConfiguration rollbackConfiguration) {
-        return Mono.defer(() -> {
-            cause = null;
-            if (phase() == Phase.NOT_STARTED) {
-                return start().timeout(Duration.ofSeconds(3));
-            } else {
-                return Mono.empty();
-            }
-        })
-                .then(Mono.fromRunnable(() -> Assert.state(phase() == Phase.STARTED, () -> String.format("The UnitOfWork has an incompatible phase: %s", phase()))))
-                .thenMany(Flux.defer(()->Flux.fromIterable(processingContexts)))
-                .doOnNext(context-> processingContext = context)
-                .concatMap(r -> executeTask.map(result -> {
-                    if (result instanceof ResultMessage) {
-                        return (ResultMessage<R>) result;
-                    } else if (result instanceof Message) {
-                        return new GenericResultMessage<>(result, ((Message) result).getMetaData());
-                    } else {
-                        return new GenericResultMessage<>(result);
-                    }
-                }).onErrorResume(t->
-                     Mono.defer(()-> {
-                         if (rollbackConfiguration.rollBackOn(t)) {
-                             return rollback(t).then(Mono.just(asResultMessage(t)));
-                         }
-
-                         if (cause != null) {
-                             cause.addSuppressed(t);
-                         } else {
-                             cause = t;
-                         }
-                         return Mono.just(asResultMessage(cause));
-
-                    })
-                ))
+        return startIfNotStarted()
+                .then(assertAndContinue(phase -> phase == Phase.STARTED, "Executing Batching with Result"))
+                .thenMany(Flux.defer(() -> Flux.fromIterable(processingContexts)))
+                .doOnNext(context -> processingContext = context)
+                .concatMap(r -> executeTask(executeTask, rollbackConfiguration))
                 .doOnNext(resultMessage -> setExecutionResult(new ExecutionResult(resultMessage)))
                 .last()
                 .flatMap(resultMessage -> commit().thenReturn(resultMessage))
                 .onErrorResume(t -> Mono.just(asResultMessage(t)));
+    }
+
+    private <R> Mono<ResultMessage<R>> executeTask(Mono<R> executeTask, RollbackConfiguration rollbackConfiguration) {
+        return executeTask
+                .map(this::toResultMessage)
+                .onErrorResume(t -> recoverAndContinue(t, rollbackConfiguration));
+    }
+
+    private Mono<Void> startIfNotStarted(){
+        return Mono.defer(() -> {
+            cause = null;
+            return phase() == Phase.NOT_STARTED ? start() : Mono.empty();
+        });
+    }
+
+    private <R> Mono<ResultMessage<R>> recoverAndContinue(Throwable t, RollbackConfiguration rollbackConfiguration) {
+        return Mono.defer(() -> {
+            if (rollbackConfiguration.rollBackOn(t)) {
+                return rollback(t).thenReturn(asResultMessage(t));
+            }
+
+            if (cause != null) {
+                cause.addSuppressed(t);
+            } else {
+                cause = t;
+            }
+            return Mono.just(asResultMessage(cause));
+
+        });
+    }
+
+    private <R> ResultMessage<R> toResultMessage(R result) {
+        if (result instanceof ResultMessage) {
+            return (ResultMessage<R>) result;
+        } else if (result instanceof Message) {
+            return new GenericResultMessage<>(result, ((Message) result).getMetaData());
+        } else {
+            return new GenericResultMessage<>(result);
+        }
     }
 
     /**
@@ -144,12 +166,12 @@ public class BatchingReactiveUnitOfWork<T extends Message<?>> extends AbstractRe
                             processingContexts.iterator();
 
             return Flux.<ReactiveMessageProcessingContext<T>>push(fluxSink -> {
-                while(iterator.hasNext()) {
-                   fluxSink.next( iterator.next());
+                while (iterator.hasNext()) {
+                    fluxSink.next(iterator.next());
                 }
-               fluxSink.complete();
+                fluxSink.complete();
             })
-           .concatMap(context -> (processingContext = context).notifyHandlers(this, phase));
+                    .concatMap(context -> (processingContext = context).notifyHandlers(this, phase));
         }).then();
     }
 

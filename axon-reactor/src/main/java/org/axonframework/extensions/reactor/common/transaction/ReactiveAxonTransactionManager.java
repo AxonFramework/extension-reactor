@@ -1,7 +1,5 @@
-package org.axonframework.extensions.reactor.common.transaction;
-
 /*
- * Copyright (c) 2010-2018. Axon Framework
+ * Copyright (c) 2010-2020. Axon Framework
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,6 +13,8 @@ package org.axonframework.extensions.reactor.common.transaction;
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+package org.axonframework.extensions.reactor.common.transaction;
 
 
 import org.axonframework.common.transaction.Transaction;
@@ -40,37 +40,39 @@ public interface ReactiveAxonTransactionManager {
      * Executes the given {@code task} in a new {@link Transaction}. The transaction is committed when the task
      * completes normally, and rolled back when it throws an exception.
      *
-     * @param task The task to execute
+     * @param executeTask The task to execute
      */
-    default Mono<Void> executeInTransaction(Mono<Void> task) {
+    default Mono<Void> executeInTransaction(Mono<Void> executeTask) {
         return startTransaction()
-                .flatMap(transaction -> task
+                .flatMap(transaction -> executeTask
                         .then(transaction.commit())
-                        .onErrorResume(t ->
-                                transaction.rollback().then(Mono.error(t))
-                        )
+                        .onErrorResume(t -> rollbackAndPropagateError(transaction,t))
                 );
     }
 
     /**
-     * Invokes the given {@code supplier} in a transaction managed by the current TransactionManager. Upon completion
+     * Invokes the given {@code task} in a transaction managed by the current TransactionManager. Upon completion
      * of the call, the transaction will be committed in the case of a regular return value, or rolled back in case an
      * exception occurred.
      * <p>
      * This method is an alternative to {@link #executeInTransaction(Mono)} in cases where a result needs to be
      * returned from the code to be executed transactionally.
      *
-     * @param supplier The supplier of the value to return
+     * @param executeTask The task of the value to return
      * @param <T>      The type of value to return
      * @return The value returned by the supplier
      */
-    default <T> Mono<T> fetchInTransaction(Mono<T> supplier) {
+    default <T> Mono<T> fetchInTransaction(Mono<T> executeTask) {
         return startTransaction()
-                .zipWith(supplier)
+                .zipWith(executeTask)
                 .flatMap(transactionTuple -> transactionTuple.getT1()
                         .commit()
                         .thenReturn(transactionTuple.getT2())
-                        .onErrorResume(t -> transactionTuple.getT1().rollback().then(Mono.error(t)))
+                        .onErrorResume(t -> rollbackAndPropagateError(transactionTuple.getT1(), t))
                 );
+    }
+
+    default <T> Mono<T> rollbackAndPropagateError(ReactiveAxonTransaction transaction, Throwable t) {
+        return transaction.rollback().then(Mono.error(t));
     }
 }

@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010-2020. Axon Framework
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.common.Assert;
@@ -43,41 +59,51 @@ public class DefaultReactiveUnitOfWork<T extends Message<?>> extends AbstractRea
      */
     public static <T extends Message<?>> Mono<DefaultReactiveUnitOfWork<T>> startAndGet(T message) {
         DefaultReactiveUnitOfWork<T> uow = new DefaultReactiveUnitOfWork<>(message);
-        return Mono
-                .when(uow.start())
+        return uow.start()
                 .thenReturn(uow);
     }
 
 
     @Override
     public <R> Mono<ResultMessage<R>> executeWithResult(Mono<R> executeTask, RollbackConfiguration rollbackConfiguration) {
-        return Mono.defer(() -> {
+        return startIfNotStarted()
+                .then(assertAndContinue(phase -> phase == Phase.STARTED, "Executing Default Unit of Work"))
+                .then(executeTask)
+                .map(DefaultReactiveUnitOfWork::toResultMessage)
+                .doOnNext(resultMessage -> setExecutionResult(new ExecutionResult(resultMessage)))
+                .flatMap(resultMessage -> commit().thenReturn(resultMessage))
+                .onErrorResume(t -> recoverAndContinue(rollbackConfiguration, t));
+    }
+
+    private Mono<Void> startIfNotStarted() {
+      return  Mono.defer(() -> {
             if (phase() == Phase.NOT_STARTED) {
                 return start();
             } else {
                 return Mono.empty();
             }
-        })
-                .then(Mono.fromRunnable(() -> Assert.state(phase() == Phase.STARTED, () -> String.format("The UnitOfWork has an incompatible phase: %s", phase()))))
-                .then(executeTask)
-                .map(result -> {
-                    if (result instanceof ResultMessage) {
-                        return (ResultMessage<R>) result;
-                    } else if (result instanceof Message) {
-                        return new GenericResultMessage<>(result, ((Message) result).getMetaData());
-                    } else {
-                        return new GenericResultMessage<>(result);
-                    }
-                })
-                .doOnNext(resultMessage -> setExecutionResult(new ExecutionResult(resultMessage)))
-                .flatMap(resultMessage -> commit().then(Mono.just(resultMessage)))
-                .onErrorResume(t -> {
-                    if (rollbackConfiguration.rollBackOn(t)) {
-                        return rollback(t).then(Mono.just(asResultMessage(t)));
-                    }
-                    return Mono.just(asResultMessage(t));
-                });
+        });
     }
+
+    private static <R> ResultMessage<R> toResultMessage(R result) {
+        if (result instanceof ResultMessage) {
+            return (ResultMessage<R>) result;
+        } else if (result instanceof Message) {
+            return new GenericResultMessage<>(result, ((Message) result).getMetaData());
+        } else {
+            return new GenericResultMessage<>(result);
+        }
+    }
+
+    private <R> Mono<ResultMessage<R>> recoverAndContinue(RollbackConfiguration rollbackConfiguration, Throwable t) {
+        return Mono.defer(() -> {
+            if (rollbackConfiguration.rollBackOn(t)) {
+                return rollback(t).thenReturn(asResultMessage(t));
+            }
+            return Mono.just(asResultMessage(t));
+        });
+    }
+
 
     @Override
     protected void setRollbackCause(Throwable cause) {

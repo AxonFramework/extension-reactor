@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010-2020. Axon Framework
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.common.Assert;
@@ -12,9 +28,8 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.*;
-import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Supplier;
+import java.util.function.Predicate;
 
 /**
  * Abstract implementation of the Reactor Unit of Work. It provides default implementations of all methods related to the
@@ -34,20 +49,16 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
 
     @Override
     public Mono<Void> start() {
-        return Mono.fromRunnable(() -> {
-            if (logger.isDebugEnabled()) {
-                logger.debug("Starting Unit Of Work");
-            }
-            Assert.state(ReactiveUnitOfWork.Phase.NOT_STARTED.equals(phase()), () -> "UnitOfWork is already started");
-            rolledBack = false;
-            onRollbackRun(u -> rolledBack = true);
-        })
-                .then(ReactiveCurrentUnitOfWork.ifStarted(parent ->
-                                Mono.fromRunnable(() -> {
-                                    // we're nesting.
-                                    this.parentUnitOfWork = parent;
-                                    root().onCleanup(r -> changePhase(Phase.CLEANUP, Phase.CLOSED));
-                                })
+        return assertAndContinue(
+                phase -> phase == Phase.NOT_STARTED,
+                () -> {
+                    rolledBack = false;
+                    onRollbackRun(u -> rolledBack = true);
+                }, "Starting Unit Of Work")
+                .then(ReactiveCurrentUnitOfWork.ifStartedRun(parent -> {
+                            this.parentUnitOfWork = parent;
+                            root().onCleanup(r -> changePhase(Phase.CLEANUP, Phase.CLOSED));
+                        }
                 ))
                 .then(changePhase(ReactiveUnitOfWork.Phase.STARTED))
                 .and(ReactiveCurrentUnitOfWork.set(this));
@@ -55,50 +66,34 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
 
     @Override
     public Mono<Void> commit() {
-        return Mono.fromRunnable(() -> {//todo refactor
-            if (logger.isDebugEnabled()) {
-                logger.debug("Committing Unit Of Work");
-            }
-            Assert.state(phase() == ReactiveUnitOfWork.Phase.STARTED, () -> String.format("The UnitOfWork is in an incompatible phase: %s", phase()));
-        }).then(isCurrent())
-                .flatMap(current -> !current ? Mono.error(new RuntimeException("The UnitOfWork is not the current Unit of Work")) : isRoot() ? commitAsRoot() : commitAsNested())
+        return assertAndContinue(phase -> phase == Phase.STARTED, "Committing Unit Of Work")
+                .then(isCurrent())
+                .flatMap(this::commitIfCurrent)
                 .then(ReactiveCurrentUnitOfWork.clear(this))
                 .onErrorResume(t -> ReactiveCurrentUnitOfWork.clear(this).and(Mono.error(t)));
     }
 
+    private Mono<Void> commitIfCurrent(Boolean current) {
+        return current ? isRoot() ? commitAsRoot() : commitAsNested() : Mono.error(new RuntimeException("The UnitOfWork is not the current Unit of Work"));
+    }
+
     private Mono<Void> commitAsRoot() {
         return changePhase(ReactiveUnitOfWork.Phase.PREPARE_COMMIT, ReactiveUnitOfWork.Phase.COMMIT)
-                .onErrorResume(t -> {
-                    setRollbackCause(t);
-                    return changePhase(
-                            ReactiveUnitOfWork.Phase.ROLLBACK)
-                            .and(Mono.error(t));
-                })
-                .then(Mono.defer(()-> {
-                    if (phase() == Phase.COMMIT) {
-                        return changePhase(Phase.AFTER_COMMIT);
-                    } else return Mono.empty();
-                }))
+                .onErrorResume(this::rollbackAndPropagateError)
+                .then(changePhaseIfInCommitPhase())
                 .then(changePhase(ReactiveUnitOfWork.Phase.CLEANUP, ReactiveUnitOfWork.Phase.CLOSED))
-                .onErrorResume(t ->
-                        changePhase(Phase.CLEANUP, Phase.CLOSED)
-                        .and(Mono.error(t)));
+                .onErrorResume(this::cleanUpAndPropagateError);
     }
 
     private Mono<Void> commitAsNested() {
         return changePhase(ReactiveUnitOfWork.Phase.PREPARE_COMMIT, ReactiveUnitOfWork.Phase.COMMIT)
                 .then(delegateAfterCommitToParent(this))
-                .and(Mono.fromRunnable(() -> parentUnitOfWork.onRollback(u -> changePhase(Phase.ROLLBACK))))
-                .onErrorResume(t -> {
-                    setRollbackCause(t);
-                    return changePhase(ReactiveUnitOfWork.Phase.ROLLBACK)
-                            .then(Mono.error(t));
-                });
+                .and(setParentRollbackHook())
+                .onErrorResume(this::rollbackAndPropagateError);
     }
 
-
     private Mono<Void> delegateAfterCommitToParent(ReactiveUnitOfWork<?> reactiveUnitOfWorkMono) {
-        return Mono.defer(()->{
+        return Mono.defer(() -> {
             Optional<ReactiveUnitOfWork<?>> parent = reactiveUnitOfWorkMono.parent();
             if (parent.isPresent()) {
                 parent.get().afterCommit(this::delegateAfterCommitToParent);
@@ -109,29 +104,65 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
         });
     }
 
+    private Mono<Void> changePhaseIfInCommitPhase() {
+        return Mono.defer(() -> {
+            if (phase() == Phase.COMMIT) {
+                return changePhase(Phase.AFTER_COMMIT);
+            } else return Mono.empty();
+        });
+    }
+
+    private Mono<Object> setParentRollbackHook() {
+        return Mono.fromRunnable(() -> parentUnitOfWork.onRollback(u -> changePhase(Phase.ROLLBACK)));
+    }
+
     @Override
     public Mono<Void> rollback(Throwable cause) {
-        return Mono.fromRunnable(() -> {
-            if (logger.isDebugEnabled()) {
-                logger.debug("Rolling back Unit Of Work.", cause);
-            }
-            Assert.state(isActive() && phase().isBefore(ReactiveUnitOfWork.Phase.ROLLBACK),
-                    () -> String.format("The UnitOfWork is in an incompatible phase: %s", phase()));
-        }).then(isCurrent()
-                .flatMap(current -> {
-                    if (!current) {
-                        return Mono.error(new IllegalStateException("The UnitOfWork is not the current Unit of Work"));
-                    } else {
-                        setRollbackCause(cause);
-                        if (isRoot()) {
-                            return changePhase(ReactiveUnitOfWork.Phase.ROLLBACK)
-                                    .and(changePhase(ReactiveUnitOfWork.Phase.CLEANUP, ReactiveUnitOfWork.Phase.CLOSED));
-                        }
-                        return changePhase(ReactiveUnitOfWork.Phase.ROLLBACK);
-                    }
-                }))
+        return assertAndContinue(
+                phase -> isActive() && phase.isBefore(Phase.ROLLBACK), "Rolling back Unit Of Work. Error: " + cause.getLocalizedMessage()
+        ).then(isCurrent()
+                .flatMap(current -> rollbackIfCurrent(current, cause)))
                 .then(ReactiveCurrentUnitOfWork.clear(this))
                 .onErrorResume(t -> ReactiveCurrentUnitOfWork.clear(this).and(Mono.error(t)));
+    }
+
+    private Mono<Void> rollbackIfCurrent(boolean current, Throwable cause) {
+        if (current) {
+            setRollbackCause(cause);
+            return isRoot() ? changePhase(Phase.ROLLBACK)
+                    .and(changePhase(Phase.CLEANUP, Phase.CLOSED)) : changePhase(Phase.ROLLBACK);
+        } else {
+            return Mono.error(new IllegalStateException("The UnitOfWork is not the current Unit of Work"));
+        }
+    }
+
+    private Mono<Void> cleanUpAndPropagateError(Throwable t) {
+        return changePhase(Phase.CLEANUP, Phase.CLOSED)
+                .and(Mono.error(t));
+    }
+
+    private Mono<Void> rollbackAndPropagateError(Throwable t) {
+        return Mono.defer(() -> {
+            setRollbackCause(t);
+            return changePhase(
+                    ReactiveUnitOfWork.Phase.ROLLBACK)
+                    .and(Mono.error(t));
+        });
+    }
+
+    protected Mono<Void> assertAndContinue(Predicate<Phase> predicate, String logMessage) {
+        return assertAndContinue(predicate, null, logMessage);
+
+    }
+
+    protected Mono<Void> assertAndContinue(Predicate<Phase> predicate, Runnable doAfterAssert, String logMessage) {
+        return Mono.fromRunnable(() -> {
+            if (logger.isDebugEnabled()) {
+                logger.debug(logMessage);
+            }
+            Assert.state(predicate.test(phase()), () -> String.format("The UnitOfWork is in an incompatible phase: %s", phase()));
+            if (doAfterAssert != null) doAfterAssert.run();
+        });
     }
 
     @Override

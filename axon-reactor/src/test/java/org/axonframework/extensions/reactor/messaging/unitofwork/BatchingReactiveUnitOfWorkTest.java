@@ -1,3 +1,21 @@
+/*
+ *  Copyright (c) 2010-2020. Axon Framework
+ *
+ *  Licensed under the Apache License, Version 2.0 (the "License");
+ *  you may not use this file except in compliance with the License.
+ *  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ *  Unless required by applicable law or agreed to in writing, software
+ *  distributed under the License is distributed on an "AS IS" BASIS,
+ *  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ *  See the License for the specific language governing permissions and
+ *  limitations under the License.
+ *
+ *
+ */
+
 package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.messaging.GenericMessage;
@@ -41,7 +59,7 @@ class BatchingReactiveUnitOfWorkTest {
     }
 
     @Test
-    void testExecuteTask() throws Exception {
+    void testExecuteTask() {
         List<Message<?>> messages = Arrays.asList(toMessage(0), toMessage(1), toMessage(2));
         subject = new BatchingReactiveUnitOfWork(messages);
 
@@ -60,7 +78,7 @@ class BatchingReactiveUnitOfWorkTest {
         assertExecutionResults(expectedResults, subject.getExecutionResults());
     }
 
-    //todo backpressure
+    //todo backpressure test
 
     @Test
     void testRollback() {
@@ -121,7 +139,7 @@ class BatchingReactiveUnitOfWorkTest {
         expectedResult.put(messages.get(2), new ExecutionResult(asResultMessage(taskException)));
         assertExecutionResults(expectedResult, subject.getExecutionResults());
         assertSame(commitException, taskException.getSuppressed()[0]);
-      //  assertEquals(2, cleanupCounter.get());
+        assertEquals(2, cleanupCounter.get());
     }
 
     private ReactiveUnitOfWork<?> registerListeners(ReactiveUnitOfWork<?> unitOfWork) {

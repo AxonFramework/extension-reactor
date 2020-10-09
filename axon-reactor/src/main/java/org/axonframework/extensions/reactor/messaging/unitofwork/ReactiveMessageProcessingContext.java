@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010-2020. Axon Framework
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.common.Assert;
@@ -47,25 +63,27 @@ public class ReactiveMessageProcessingContext<T extends Message<?>> {
      */
     @SuppressWarnings("unchecked")
     public Mono<Void> notifyHandlers(ReactiveUnitOfWork<T> unitOfWork, ReactiveUnitOfWork.Phase phase) {
-        if (LOGGER.isDebugEnabled()) {
-            LOGGER.debug("Notifying handlers for phase {}", phase.toString());
-        }
-
         return Mono.fromCallable(() ->
                 (Deque<Function<ReactiveUnitOfWork<T>, Mono<Void>>>) handlers.getOrDefault(phase, EMPTY))
                 .flatMapIterable(Function.identity())
-                .concatMap(handler -> handler.apply(unitOfWork)
-                        .onErrorResume(t->
-                                Mono.defer(()-> {
-                                    if (phase.isSuppressHandlerErrors()) {
-                                        LOGGER.info("An error occurred while executing a lifecycle phase handler for phase {}", phase, t);
-                                        return Mono.empty();
-                                    } else {
-                                        return Mono.error(t);
-                                    }
-                                })
-                        ))
+                .concatMap(handler -> notifyHandlerAndHandleErrors(unitOfWork, phase, handler))
                 .then();
+    }
+
+    public Mono<Void> notifyHandlerAndHandleErrors(ReactiveUnitOfWork<T> unitOfWork, ReactiveUnitOfWork.Phase phase, Function<ReactiveUnitOfWork<T>, Mono<Void>> handler) {
+        return handler.apply(unitOfWork)
+                .onErrorResume(t -> suppressAndPropagateError(phase, t));
+    }
+
+    private Mono<Void> suppressAndPropagateError(ReactiveUnitOfWork.Phase phase, Throwable t){
+        return Mono.defer(()-> {
+            if (phase.isSuppressHandlerErrors()) {
+                LOGGER.info("An error occurred while executing a lifecycle phase handler for phase {}", phase, t);
+                return Mono.empty();
+            } else {
+                return Mono.error(t);
+            }
+        });
     }
 
     /**

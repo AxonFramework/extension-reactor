@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010-2020. Axon Framework
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.messaging.MetaData;
@@ -6,6 +22,7 @@ import reactor.core.publisher.Mono;
 import reactor.util.context.Context;
 
 import java.util.Deque;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -57,6 +74,11 @@ public abstract class ReactiveCurrentUnitOfWork {
                 .defaultIfEmpty(Boolean.FALSE);
     }
 
+
+    public static Mono<Boolean> ifStartedRun(Consumer<ReactiveUnitOfWork<?>> consumer) {
+        return ifStarted(u-> Mono.fromRunnable(()->consumer.accept(u)));
+    }
+
     /**
      * If a Unit of Work is started, execute the given {@code function} on it. Otherwise, returns an empty Optional.
      * Use this method when you wish to retrieve information from a Unit of Work, reverting to a default when no Unit
@@ -72,12 +94,12 @@ public abstract class ReactiveCurrentUnitOfWork {
     }
 
     /**
-     * Gets the UnitOfWork bound to the current thread. If no UnitOfWork has been started, an {@link
+     * Gets the UnitOfWork bound to the current Context. If no UnitOfWork has been started, an {@link
      * IllegalStateException} is thrown.
      * <p/>
      * To verify whether a UnitOfWork is already active, use {@link #isStarted()}.
      *
-     * @return The UnitOfWork bound to the current thread.
+     * @return The UnitOfWork bound to the current Context.
      * @throws IllegalStateException if no UnitOfWork is active
      */
     public static Mono<? extends ReactiveUnitOfWork<?>> get() {
@@ -105,9 +127,9 @@ public abstract class ReactiveCurrentUnitOfWork {
      * Binds the given {@code unitOfWork} to the current context. If other UnitOfWork instances were bound, they
      * will be marked as inactive until the given UnitOfWork is cleared.
      *
-     * @param unitOfWork The UnitOfWork to bind to the current thread.
+     * @param unitOfWork The UnitOfWork to bind to the current Context.
      */
-    public static Mono<ReactiveUnitOfWork> set(ReactiveUnitOfWork<?> unitOfWork) {
+    public static Mono<ReactiveUnitOfWork<?>> set(ReactiveUnitOfWork<?> unitOfWork) {
         return currentContext()
                 .doOnNext(deq-> deq.push(unitOfWork))
                 .then(Mono.just(unitOfWork));
@@ -128,10 +150,10 @@ public abstract class ReactiveCurrentUnitOfWork {
     }
 
     /**
-     * Clears the UnitOfWork currently bound to the current thread, if that UnitOfWork is the given
+     * Clears the UnitOfWork currently bound to the current Context, if that UnitOfWork is the given
      * {@code unitOfWork}.
      *
-     * @param unitOfWork The UnitOfWork expected to be bound to the current thread.
+     * @param unitOfWork The UnitOfWork expected to be bound to the current Context.
      * @throws IllegalStateException when the given UnitOfWork was not the current active UnitOfWork. This exception
      *                               indicates a potentially wrong nesting of Units Of Work.
      */
