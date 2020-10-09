@@ -1,4 +1,4 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.common.Assert;
 import org.axonframework.messaging.Message;
@@ -12,13 +12,16 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.*;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Abstract implementation of the Reactor Unit of Work. It provides default implementations of all methods related to the
  * processing of a Message.
  *
  * @author Stefan Dragisic
+ * @author Allard Buijze
  */
 public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implements ReactiveUnitOfWork<T> {
 
@@ -37,7 +40,7 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
             }
             Assert.state(ReactiveUnitOfWork.Phase.NOT_STARTED.equals(phase()), () -> "UnitOfWork is already started");
             rolledBack = false;
-            onRollback(u -> Mono.fromRunnable(() -> rolledBack = true));
+            onRollbackRun(u -> rolledBack = true);
         })
                 .then(ReactiveCurrentUnitOfWork.ifStarted(parent ->
                                 Mono.fromRunnable(() -> {
@@ -47,29 +50,18 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
                                 })
                 ))
                 .then(changePhase(ReactiveUnitOfWork.Phase.STARTED))
-                .then(ReactiveCurrentUnitOfWork.set(this))
-                .then();
+                .and(ReactiveCurrentUnitOfWork.set(this));
     }
 
     @Override
     public Mono<Void> commit() {
-        return Mono.fromRunnable(() -> {
+        return Mono.fromRunnable(() -> {//todo refactor
             if (logger.isDebugEnabled()) {
                 logger.debug("Committing Unit Of Work");
             }
             Assert.state(phase() == ReactiveUnitOfWork.Phase.STARTED, () -> String.format("The UnitOfWork is in an incompatible phase: %s", phase()));
-        }).then(isCurrent()
-                .flatMap(current -> {
-                    if (!current) {
-                        return Mono.error(new RuntimeException("The UnitOfWork is not the current Unit of Work"));
-                    } else {
-                        if (isRoot()) {
-                            return commitAsRoot();
-                        } else {
-                            return commitAsNested();
-                        }
-                    }
-                }))
+        }).then(isCurrent())
+                .flatMap(current -> !current ? Mono.error(new RuntimeException("The UnitOfWork is not the current Unit of Work")) : isRoot() ? commitAsRoot() : commitAsNested())
                 .then(ReactiveCurrentUnitOfWork.clear(this))
                 .onErrorResume(t -> ReactiveCurrentUnitOfWork.clear(this).and(Mono.error(t)));
     }

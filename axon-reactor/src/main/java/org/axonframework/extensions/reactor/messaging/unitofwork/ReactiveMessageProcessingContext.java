@@ -1,9 +1,8 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.common.Assert;
 import org.axonframework.messaging.Message;
 import org.axonframework.messaging.unitofwork.ExecutionResult;
-import org.axonframework.messaging.unitofwork.UnitOfWork;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
@@ -19,6 +18,7 @@ import java.util.function.Function;
  * processing the Message transitions to a new {@link ReactiveUnitOfWork.Phase}.
  *
  * @author Stefan Dragisic
+ * @author Allard Buijze
  */
 public class ReactiveMessageProcessingContext<T extends Message<?>> {
 

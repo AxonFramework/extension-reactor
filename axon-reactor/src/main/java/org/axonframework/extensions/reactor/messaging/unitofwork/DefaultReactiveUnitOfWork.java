@@ -1,4 +1,4 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.common.Assert;
 import org.axonframework.messaging.GenericResultMessage;
@@ -16,6 +16,7 @@ import static org.axonframework.messaging.GenericResultMessage.asResultMessage;
  * Implementation of the UnitOfWork that processes a single message.
  *
  * @author Stefan Dragisic
+ * @author Allard Buijze
  */
 public class DefaultReactiveUnitOfWork<T extends Message<?>> extends AbstractReactiveUnitOfWork<T> {
 

@@ -1,4 +1,4 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.eventhandling.GenericEventMessage;
 import org.junit.jupiter.api.BeforeEach;
@@ -42,11 +42,11 @@ public class NestedReactiveUnitOfWorkTest {
     }
 
     private DefaultReactiveUnitOfWork<GenericEventMessage<String>> registerListeners(DefaultReactiveUnitOfWork<GenericEventMessage<String>> unitOfWork) {
-        unitOfWork.onPrepareCommit(u -> Mono.fromRunnable(() -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.PREPARE_COMMIT))));
-        unitOfWork.onCommit(u -> Mono.fromRunnable(() -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.COMMIT))));
-        unitOfWork.afterCommit(u -> Mono.fromRunnable(() -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.AFTER_COMMIT))));
-        unitOfWork.onRollback(u -> Mono.fromRunnable(() -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.ROLLBACK))));
-        unitOfWork.onCleanup(u -> Mono.fromRunnable(() -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.CLEANUP))));
+        unitOfWork.onPrepareCommitRun(u -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.PREPARE_COMMIT)));
+        unitOfWork.onCommitRun(u -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.COMMIT)));
+        unitOfWork.afterCommitRun(u -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.AFTER_COMMIT)));
+        unitOfWork.onRollbackRun(u -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.ROLLBACK)));
+        unitOfWork.onCleanupRun(u -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.CLEANUP)));
 
         return unitOfWork;
     }
@@ -54,17 +54,17 @@ public class NestedReactiveUnitOfWorkTest {
 
     @Test
     void testInnerUnitOfWorkNotifiedOfOuterCommitFailure() {
+
         outer.onPrepareCommit(u -> Mono.when(inner.start()).then(inner.commit()));
         outer.onCommit(u -> Mono.error(MockException::new));
-        outer.onCommit(u -> Mono.fromRunnable(() -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.COMMIT, "x"))));
+        outer.onCommitRun(u -> phaseTransitions.add(new PhaseTransition(u, ReactiveUnitOfWork.Phase.COMMIT, "x")));
 
-        outer.start()
+    outer.start()
                 .then(outer.commit())
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .expectError(MockException.class)
                 .verify();
-
 
         assertEquals(Arrays.asList(new PhaseTransition(outer, ReactiveUnitOfWork.Phase.PREPARE_COMMIT),
                 new PhaseTransition(inner, ReactiveUnitOfWork.Phase.PREPARE_COMMIT),

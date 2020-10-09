@@ -1,27 +1,19 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.commandhandling.GenericCommandMessage;
-import org.axonframework.common.transaction.Transaction;
-import org.axonframework.common.transaction.TransactionManager;
 import org.axonframework.eventhandling.GenericEventMessage;
-import org.axonframework.extensions.reactor.poc.uow.transaction.ReactiveSpringTransactionManager;
-import org.axonframework.messaging.unitofwork.CurrentUnitOfWork;
-import org.axonframework.messaging.unitofwork.UnitOfWork;
+import org.axonframework.extensions.reactor.common.transaction.ReactiveSpringTransactionManager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.ReactiveTransaction;
 import org.springframework.transaction.ReactiveTransactionManager;
-import reactor.core.publisher.Flux;
 import reactor.core.publisher.Hooks;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Function;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;

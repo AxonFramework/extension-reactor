@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package org.axonframework.extensions.reactor.poc.uow.transaction;
+package org.axonframework.extensions.reactor.common.transaction;
 
 import org.axonframework.common.Assert;
 import org.springframework.transaction.ReactiveTransaction;

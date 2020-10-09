@@ -1,4 +1,4 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.messaging.MetaData;
 import org.junit.jupiter.api.Test;

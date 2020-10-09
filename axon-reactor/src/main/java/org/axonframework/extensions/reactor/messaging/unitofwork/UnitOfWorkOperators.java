@@ -1,4 +1,4 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import reactor.core.publisher.Mono;
 
@@ -9,6 +9,10 @@ import reactor.core.publisher.Mono;
  */
 public interface UnitOfWorkOperators {
 
+    /**
+     * Sets execution for Unit of Work
+     * Used when initializing Unit of Work pipeline
+     * */
     static <T> Mono<T> executionContext(Mono<T> pipeline) {
         return pipeline.subscriberContext(ReactiveCurrentUnitOfWork.initializeExecutionContext());
     }

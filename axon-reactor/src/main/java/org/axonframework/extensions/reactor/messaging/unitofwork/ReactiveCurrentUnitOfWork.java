@@ -1,4 +1,4 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.unitofwork.UnitOfWork;
@@ -52,7 +52,7 @@ public abstract class ReactiveCurrentUnitOfWork {
     public static Mono<Boolean> ifStarted(Function<ReactiveUnitOfWork<?>, Mono<?>> consumer) {
         return isStarted()
                 .filter(Boolean::booleanValue)
-                .flatMap(unused-> get())
+                .flatMap(unused->get())
                 .flatMap(uow -> consumer.apply(uow).thenReturn(Boolean.TRUE))
                 .defaultIfEmpty(Boolean.FALSE);
     }
@@ -109,9 +109,8 @@ public abstract class ReactiveCurrentUnitOfWork {
      */
     public static Mono<ReactiveUnitOfWork> set(ReactiveUnitOfWork<?> unitOfWork) {
         return currentContext()
-                .doOnNext(deq-> {
-                    deq.push(unitOfWork);
-                }).then(Mono.just(unitOfWork));
+                .doOnNext(deq-> deq.push(unitOfWork))
+                .then(Mono.just(unitOfWork));
     }
 
     /**
@@ -139,7 +138,7 @@ public abstract class ReactiveCurrentUnitOfWork {
     public static Mono<Void> clear(ReactiveUnitOfWork<?> unitOfWork) {
         return isStarted()
                 .filter(Boolean::booleanValue)
-                .flatMap(it -> currentContext())
+                .flatMap(unused -> currentContext())
                 .flatMap(deq -> {
                             if (deq.peek() == unitOfWork) {
                                 deq.pop();

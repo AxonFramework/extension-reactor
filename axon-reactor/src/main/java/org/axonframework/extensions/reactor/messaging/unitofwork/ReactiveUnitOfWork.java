@@ -1,6 +1,6 @@
-package org.axonframework.extensions.reactor.poc.uow;
+package org.axonframework.extensions.reactor.messaging.unitofwork;
 
-import org.axonframework.extensions.reactor.poc.uow.transaction.ReactiveAxonTransactionManager;
+import org.axonframework.extensions.reactor.common.transaction.ReactiveAxonTransactionManager;
 import org.axonframework.messaging.Message;
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
@@ -10,7 +10,9 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * This class represents a Unit of Work that monitors the processing of a {@link Message}.
@@ -21,6 +23,7 @@ import java.util.function.Function;
  * Handlers can be notified about the state of the processing of the Message by registering with this Unit of Work.
  *
  * @author Stefan Dragisic
+ * @author Allard Buijze
  */
 public interface ReactiveUnitOfWork<T extends Message<?>> {
 
@@ -95,11 +98,31 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
 
     /**
      * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
+     * Unit of Work changes to {@link ReactiveUnitOfWork.Phase#PREPARE_COMMIT}.
+     *
+     * @param handler the handler to register with the Unit of Work
+     */
+    default void onPrepareCommitRun(Consumer<ReactiveUnitOfWork<T>> handler) {
+        onPrepareCommit(u->Mono.fromRunnable(() -> handler.accept(u)));
+    }
+
+    /**
+     * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
      * Unit of Work changes to {@link ReactiveUnitOfWork.Phase#COMMIT}.
      *
      * @param handler the handler to register with the Unit of Work
      */
     void onCommit(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
+
+    /**
+     * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
+     * Unit of Work changes to {@link ReactiveUnitOfWork.Phase#COMMIT}.
+     *
+     * @param handler the handler to register with the Unit of Work
+     */
+    default void onCommitRun(Consumer<ReactiveUnitOfWork<T>> handler) {
+        onCommit(u->Mono.fromRunnable(() -> handler.accept(u)));
+    }
 
     /**
      * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
@@ -111,12 +134,34 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
 
     /**
      * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
+     * Unit of Work changes to {@link UnitOfWork.Phase#AFTER_COMMIT}.
+     *
+     * @param handler the handler to register with the Unit of Work
+     */
+    default void afterCommitRun(Consumer<ReactiveUnitOfWork<T>> handler) {
+        afterCommit(u->Mono.fromRunnable(() -> handler.accept(u)));
+    }
+
+    /**
+     * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
      * Unit of Work changes to {@link ReactiveUnitOfWork.Phase#ROLLBACK}. On rollback, the cause for the rollback can obtained from the
      * supplied
      *
      * @param handler the handler to register with the Unit of Work
      */
     void onRollback(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
+
+
+    /**
+     * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
+     * Unit of Work changes to {@link ReactiveUnitOfWork.Phase#ROLLBACK}. On rollback, the cause for the rollback can obtained from the
+     * supplied
+     *
+     * @param handler the handler to register with the Unit of Work
+     */
+    default void onRollbackRun(Consumer<ReactiveUnitOfWork<T>> handler) {
+        onRollback(u->Mono.fromRunnable(()-> handler.accept(u)));
+    }
 
     /**
      * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
@@ -125,6 +170,16 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      * @param handler the handler to register with the Unit of Work
      */
     void onCleanup(Function<ReactiveUnitOfWork<T>, Mono<Void>> handler);
+
+    /**
+     * Register given {@code handler} with the Unit of Work. The handler will be notified when the phase of the
+     * Unit of Work changes to {@link ReactiveUnitOfWork.Phase#CLEANUP}.
+     *
+     * @param handler the handler to register with the Unit of Work
+     */
+    default void onCleanupRun(Consumer<ReactiveUnitOfWork<T>> handler) {
+        onCleanup(u->Mono.fromRunnable(()-> handler.accept(u)));
+    }
 
     /**
      * Returns an optional for the parent of this Unit of Work. The optional holds the Unit of Work that was active when
@@ -287,11 +342,10 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      */
     default Mono<Void> execute(Mono<Void> task, RollbackConfiguration rollbackConfiguration) {
         return executeWithResult(task, rollbackConfiguration)
-                .flatMap(result -> {
-                    if (result.isExceptional()) {
-                        return Mono.error(new RuntimeException(result.exceptionResult()));
-                    } else return Mono.empty();
-                }).then();
+                .flatMap(result -> result.isExceptional()
+                        ? Mono.error(new RuntimeException(result.exceptionResult())) :
+                        Mono.empty())
+                .then();
     }
 
     /**
@@ -351,7 +405,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      * @return {@code true} if the Unit of Work is the currently active Unit of Work
      */
     default Mono<Boolean> isCurrent() {
-        return ReactiveCurrentUnitOfWork.isStarted()
+        return ReactiveCurrentUnitOfWork.isStarted()//todo ifStartedGet
                 .zipWith(ReactiveCurrentUnitOfWork.get())
                 .map(tuple -> tuple.getT1() && tuple.getT2() == this);
     }
