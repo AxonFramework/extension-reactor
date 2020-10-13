@@ -48,7 +48,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <axon.version>4.4.2</axon.version>
+        <axon.version>4.4.3</axon.version>
         <projectreactor.version>3.3.6.RELEASE</projectreactor.version>
 
         <spring.version>5.2.5.RELEASE</spring.version>
