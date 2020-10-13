@@ -79,17 +79,16 @@ public class BatchingReactiveUnitOfWork<T extends Message<?>> extends AbstractRe
         return startIfNotStarted()
                 .then(assertAndContinue(phase -> phase == Phase.STARTED, "Executing Batching with Result"))
                 .thenMany(Flux.defer(() -> Flux.fromIterable(processingContexts)))
-                .doOnNext(context -> processingContext = context)
-                .concatMap(r -> executeTask(r.getMessage(), task, rollbackConfiguration))
+                .concatMap(context -> Mono.defer(()-> executeTask((processingContext = context).getMessage(), task, rollbackConfiguration)))
                 .doOnNext(resultMessage -> setExecutionResult(new ExecutionResult(resultMessage)))
                 .last()
                 .flatMap(resultMessage -> commit().thenReturn(resultMessage))
-                .onErrorResume(t -> Mono.just(asResultMessage(t)))
-                .log();
+                .onErrorResume(t -> Mono.just(asResultMessage(t)));
     }
 
     private <R> Mono<ResultMessage<R>> executeTask(T message, Function<T,Mono<R>> task, RollbackConfiguration rollbackConfiguration) {
-        return task.apply(message)
+        return task
+                .apply(message)
                 .map(this::toResultMessage)
                 .onErrorResume(t -> recoverAndContinue(t, rollbackConfiguration));
     }
@@ -172,7 +171,7 @@ public class BatchingReactiveUnitOfWork<T extends Message<?>> extends AbstractRe
                 }
                 fluxSink.complete();
             })
-                    .concatMap(context -> (processingContext = context).notifyHandlers(this, phase));
+                    .concatMap(context -> Mono.defer(()->(processingContext = context).notifyHandlers(this, phase)));
         }).then();
     }
 
