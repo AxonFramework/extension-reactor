@@ -65,10 +65,10 @@ public class DefaultReactiveUnitOfWork<T extends Message<?>> extends AbstractRea
 
 
     @Override
-    public <R> Mono<ResultMessage<R>> executeWithResult(Mono<R> executeTask, RollbackConfiguration rollbackConfiguration) {
+    public <R> Mono<ResultMessage<R>> executeWithResult(Function<T,Mono<R>> executeTask, RollbackConfiguration rollbackConfiguration) {
         return startIfNotStarted()
                 .then(assertAndContinue(phase -> phase == Phase.STARTED, "Executing Default Unit of Work"))
-                .then(executeTask)
+                .then(executeTask.apply(processingContext.getMessage()))
                 .map(DefaultReactiveUnitOfWork::toResultMessage)
                 .doOnNext(resultMessage -> setExecutionResult(new ExecutionResult(resultMessage)))
                 .flatMap(resultMessage -> commit().thenReturn(resultMessage))

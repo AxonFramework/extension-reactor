@@ -75,20 +75,21 @@ public class BatchingReactiveUnitOfWork<T extends Message<?>> extends AbstractRe
      * result of the last executed task.
      */
     @Override
-    public <R> Mono<ResultMessage<R>> executeWithResult(Mono<R> executeTask, RollbackConfiguration rollbackConfiguration) {
+    public <R> Mono<ResultMessage<R>> executeWithResult(Function<T,Mono<R>> task, RollbackConfiguration rollbackConfiguration) {
         return startIfNotStarted()
                 .then(assertAndContinue(phase -> phase == Phase.STARTED, "Executing Batching with Result"))
                 .thenMany(Flux.defer(() -> Flux.fromIterable(processingContexts)))
                 .doOnNext(context -> processingContext = context)
-                .concatMap(r -> executeTask(executeTask, rollbackConfiguration))
+                .concatMap(r -> executeTask(r.getMessage(), task, rollbackConfiguration))
                 .doOnNext(resultMessage -> setExecutionResult(new ExecutionResult(resultMessage)))
                 .last()
                 .flatMap(resultMessage -> commit().thenReturn(resultMessage))
-                .onErrorResume(t -> Mono.just(asResultMessage(t)));
+                .onErrorResume(t -> Mono.just(asResultMessage(t)))
+                .log();
     }
 
-    private <R> Mono<ResultMessage<R>> executeTask(Mono<R> executeTask, RollbackConfiguration rollbackConfiguration) {
-        return executeTask
+    private <R> Mono<ResultMessage<R>> executeTask(T message, Function<T,Mono<R>> task, RollbackConfiguration rollbackConfiguration) {
+        return task.apply(message)
                 .map(this::toResultMessage)
                 .onErrorResume(t -> recoverAndContinue(t, rollbackConfiguration));
     }

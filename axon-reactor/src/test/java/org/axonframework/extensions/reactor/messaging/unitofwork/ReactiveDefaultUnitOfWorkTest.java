@@ -135,7 +135,7 @@ class ReactiveDefaultUnitOfWorkTest {
                 .delaySubscription(Duration.ofSeconds(1));
 
         DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
-                .flatMap(uow -> uow.executeWithResult(monoTask))
+                .flatMap(uow -> uow.executeWithResult(m-> monoTask))
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .assertNext(r -> assertEquals(r.getPayload(), "executed"))
@@ -148,7 +148,7 @@ class ReactiveDefaultUnitOfWorkTest {
         Mono<String> monoTask = Mono.error(runtimeException);
 
         DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
-                .flatMap(uow -> uow.executeWithResult(monoTask))
+                .flatMap(uow -> uow.executeWithResult(m-> monoTask))
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .assertNext(r -> assertEquals(runtimeException, r.exceptionResult()))
@@ -191,7 +191,7 @@ class ReactiveDefaultUnitOfWorkTest {
 
         DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
                 .flatMap(uow -> uow.attachTransaction(reactiveSpringTransactionManager).then(Mono.just(uow)))
-                .flatMap(uow -> uow.executeWithResult(monoTask))
+                .flatMap(uow -> uow.executeWithResult(m-> monoTask))
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .assertNext(r -> assertEquals(r.getPayload(), payload))
@@ -209,7 +209,7 @@ class ReactiveDefaultUnitOfWorkTest {
 
         DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
                 .flatMap(uow -> uow.attachTransaction(reactiveSpringTransactionManager).then(Mono.just(uow)))
-                .flatMap(uow -> uow.executeWithResult(monoTask))
+                .flatMap(uow -> uow.executeWithResult(m-> monoTask))
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .assertNext(r -> assertEquals(runtimeException, r.exceptionResult()))

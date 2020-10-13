@@ -132,7 +132,7 @@ public abstract class ReactiveCurrentUnitOfWork {
     public static Mono<ReactiveUnitOfWork<?>> set(ReactiveUnitOfWork<?> unitOfWork) {
         return currentContext()
                 .doOnNext(deq-> deq.push(unitOfWork))
-                .then(Mono.just(unitOfWork));
+                .thenReturn(unitOfWork);
     }
 
     /**

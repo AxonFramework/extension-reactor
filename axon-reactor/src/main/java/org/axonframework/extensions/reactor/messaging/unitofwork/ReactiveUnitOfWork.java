@@ -339,7 +339,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      *
      * @param task the task to execute
      */
-    default Mono<Void> execute(Mono<Void> task) {
+    default <R> Mono<Void> execute(Function<T,Mono<R>> task) {
         return execute(task, RollbackConfigurationType.ANY_THROWABLE);
     }
 
@@ -350,12 +350,10 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      * If the task executes successfully the Unit of Work is committed. If an exception is raised while executing the
      * task, the {@code rollbackConfiguration} determines if the Unit of Work should be rolled back or committed,
      * and the exception is thrown.
-     *
-     * @param task                  the task to execute
+     *  @param task                  the task to execute
      * @param rollbackConfiguration configucsration that determines whether or not to rollback the unit of work when task
-     *                              execution fails
      */
-    default Mono<Void> execute(Mono<Void> task, RollbackConfiguration rollbackConfiguration) {
+    default <R> Mono<Void> execute(Function<T, Mono<R>> task, RollbackConfiguration rollbackConfiguration) {
         return executeWithResult(task, rollbackConfiguration)
                 .flatMap(result -> result.isExceptional()
                         ? Mono.error(new RuntimeException(result.exceptionResult())) :
@@ -374,7 +372,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      * @param task the task to execute
      * @return The result of the task wrapped in Result Message
      */
-    default <R> Mono<ResultMessage<R>> executeWithResult(Mono<R> task) {
+    default <R> Mono<ResultMessage<R>> executeWithResult(Function<T,Mono<R>> task) {
         return executeWithResult(task, RollbackConfigurationType.ANY_THROWABLE);
     }
 
@@ -392,7 +390,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
      *                              execution fails
      * @return The result of the task wrapped in Result Message
      */
-    <R> Mono<ResultMessage<R>> executeWithResult(Mono<R> task, RollbackConfiguration rollbackConfiguration);
+    <R> Mono<ResultMessage<R>> executeWithResult(Function<T,Mono<R>> task, RollbackConfiguration rollbackConfiguration);
 
     /**
      * Get the result of the task that was executed by this Unit of Work. If the Unit of Work has not been given a task

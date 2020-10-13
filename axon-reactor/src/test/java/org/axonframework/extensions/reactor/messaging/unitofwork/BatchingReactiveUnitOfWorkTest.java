@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
@@ -63,10 +64,10 @@ class BatchingReactiveUnitOfWorkTest {
         List<Message<?>> messages = Arrays.asList(toMessage(0), toMessage(1), toMessage(2));
         subject = new BatchingReactiveUnitOfWork(messages);
 
-        subject.executeWithResult(Mono.fromCallable(() -> {
+        subject.executeWithResult(message -> Mono.fromCallable(() -> {
             registerListeners(subject);
-            return resultFor(subject.getMessage());
-        }))
+            return resultFor(message);
+        }).delayElement(Duration.ofSeconds(1)))
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .expectNextCount(1)
@@ -86,12 +87,12 @@ class BatchingReactiveUnitOfWorkTest {
         subject = new BatchingReactiveUnitOfWork(messages);
         MockException e = new MockException();
 
-        subject.executeWithResult(Mono.fromCallable(() -> {
+        subject.executeWithResult(message-> Mono.fromCallable(() -> {
             registerListeners(subject);
-            if (subject.getMessage().getPayload().equals(1)) {
+            if (message.getPayload().equals(1)) {
                 throw e;
             }
-            return resultFor(subject.getMessage());
+            return resultFor(message);
         }))
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
@@ -119,13 +120,13 @@ class BatchingReactiveUnitOfWorkTest {
         subject.onCleanup(u -> Mono.error(cleanupException));
         subject.onCleanupRun(u -> cleanupCounter.incrementAndGet());
 
-        subject.executeWithResult(Mono.fromCallable(() -> {
+        subject.executeWithResult(message -> Mono.fromCallable(() -> {
             registerListeners(subject);
-            if (subject.getMessage().getPayload().equals(2)) {
+            if (message.getPayload().equals(2)) {
                 subject.onPrepareCommit(u -> Mono.error(commitException));
                 throw taskException;
             }
-            return resultFor(subject.getMessage());
+            return resultFor(message);
         }), e -> false)
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
