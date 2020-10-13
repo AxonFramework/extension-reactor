@@ -35,7 +35,6 @@ import java.util.stream.Collectors;
 
 import static org.axonframework.extensions.reactor.messaging.unitofwork.ReactiveUnitOfWork.Phase.*;
 import static org.axonframework.messaging.GenericResultMessage.asResultMessage;
-
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -79,8 +78,6 @@ class BatchingReactiveUnitOfWorkTest {
         assertExecutionResults(expectedResults, subject.getExecutionResults());
     }
 
-    //todo backpressure test
-
     @Test
     void testRollback() {
         List<Message<?>> messages = Arrays.asList(toMessage(0), toMessage(1), toMessage(2));
@@ -93,7 +90,7 @@ class BatchingReactiveUnitOfWorkTest {
                 throw e;
             }
             return resultFor(message);
-        }))
+        }).delayElement(Duration.ofSeconds(1)))
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .expectNextCount(1)
@@ -127,7 +124,7 @@ class BatchingReactiveUnitOfWorkTest {
                 throw taskException;
             }
             return resultFor(message);
-        }), e -> false)
+        }).delayElement(Duration.ofSeconds(1)), e -> false)
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
                 .expectNextCount(1)

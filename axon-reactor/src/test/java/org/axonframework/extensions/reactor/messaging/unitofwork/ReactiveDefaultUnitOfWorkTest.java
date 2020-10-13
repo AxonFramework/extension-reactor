@@ -110,7 +110,7 @@ class ReactiveDefaultUnitOfWorkTest {
     @Test
     void rollbackCompleted() {
         DefaultReactiveUnitOfWork.startAndGet(genericEventMessage)
-                .flatMap(uow -> uow.rollback().then(Mono.just(uow)))
+                .flatMap(uow -> uow.rollback().thenReturn(uow))
                 .map(AbstractReactiveUnitOfWork::phase)
                 .as(UnitOfWorkOperators::executionContext)
                 .as(StepVerifier::create)
