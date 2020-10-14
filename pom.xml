@@ -51,7 +51,7 @@
         <axon.version>4.4.2</axon.version>
         <projectreactor.version>3.3.6.RELEASE</projectreactor.version>
 
-        <spring.version>5.2.5.RELEASE</spring.version>
+        <spring.version>5.2.9.RELEASE</spring.version>
         <spring.boot.version>2.2.6.RELEASE</spring.boot.version>
 
         <slf4j.version>1.7.28</slf4j.version>
