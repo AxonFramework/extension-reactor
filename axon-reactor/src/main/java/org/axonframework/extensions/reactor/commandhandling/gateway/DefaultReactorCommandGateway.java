@@ -1,10 +1,6 @@
 package org.axonframework.extensions.reactor.commandhandling.gateway;
 
-import org.axonframework.commandhandling.CommandBus;
-import org.axonframework.commandhandling.CommandCallback;
-import org.axonframework.commandhandling.CommandMessage;
-import org.axonframework.commandhandling.CommandResultMessage;
-import org.axonframework.commandhandling.GenericCommandMessage;
+import org.axonframework.commandhandling.*;
 import org.axonframework.commandhandling.gateway.RetryScheduler;
 import org.axonframework.commandhandling.gateway.RetryingCallback;
 import org.axonframework.common.AxonConfigurationException;
@@ -12,6 +8,7 @@ import org.axonframework.common.Registration;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
 import org.axonframework.extensions.reactor.messaging.ReactorResultHandlerInterceptor;
 import org.axonframework.extensions.reactor.commandhandling.callbacks.ReactorCallback;
+import org.axonframework.messaging.MetaData;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
@@ -72,11 +69,25 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
     @Override
     public <R> Mono<R> send(Object command) {
         //noinspection unchecked
-        return Mono.<CommandMessage<?>>just(GenericCommandMessage.asCommandMessage(command))
+        return createCommandMessage(command)
                 .transform(this::processCommandInterceptors)
                 .flatMap(this::dispatchCommand)
                 .flatMap(this::processResultsInterceptors)
                 .transform(this::getPayload);
+    }
+
+    private Mono<CommandMessage<?>> createCommandMessage(Object command) {
+        return Mono.just(command)
+                .zipWith(metaDataFromContext())
+                .map(commandAndMeta -> GenericCommandMessage.asCommandMessage(commandAndMeta.getT1())
+                        .andMetaData(commandAndMeta.getT2()));
+    }
+
+    private Mono<MetaData> metaDataFromContext() {
+        return Mono.subscriberContext()
+                .handle((ctx,sink) -> sink.next(Objects.requireNonNull(
+                        ctx.getOrDefault(MetaData.class, MetaData.emptyInstance())
+                )));
     }
 
     @Override
@@ -100,19 +111,23 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
 
     private <C, R> Mono<Tuple2<CommandMessage<C>, Flux<CommandResultMessage<? extends R>>>> dispatchCommand(
             CommandMessage<C> commandMessage) {
-        ReactorCallback<C, R> reactorCallback = new ReactorCallback<>();
-        CommandCallback<C, R> callback = reactorCallback;
-        if (retryScheduler != null) {
-            callback = new RetryingCallback<>(callback, retryScheduler, commandBus);
-        }
-        commandBus.dispatch(commandMessage, callback);
-        return Mono.just(commandMessage).zipWith(Mono.just(Flux.from(reactorCallback)));
+        return Mono.defer(()-> {
+            ReactorCallback<C, R> reactorCallback = new ReactorCallback<>();
+            CommandCallback<C, R> callback = reactorCallback;
+            if (retryScheduler != null) {
+                callback = new RetryingCallback<>(callback, retryScheduler, commandBus);
+            }
+            commandBus.dispatch(commandMessage, callback);
+            return Mono.just(commandMessage).zipWith(Mono.just(Flux.from(reactorCallback)));
+        });
     }
 
     private <C> Mono<? extends CommandResultMessage<?>> processResultsInterceptors(
             Tuple2<CommandMessage<C>, Flux<CommandResultMessage<?>>> commandWithResults) {
         CommandMessage<?> commandMessage = commandWithResults.getT1();
-        Flux<CommandResultMessage<?>> commandResultMessages = commandWithResults.getT2();
+        Flux<CommandResultMessage<?>> commandResultMessages = commandWithResults.getT2()
+                .flatMapSequential(this::mapExceptionalResult);
+
         return Flux.fromIterable(resultInterceptors)
                    .reduce(commandResultMessages,
                            (result, interceptor) -> interceptor.intercept(commandMessage, result))
@@ -124,6 +139,10 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
         return commandResultMessage
                 .filter(r -> Objects.nonNull(r.getPayload()))
                 .map(it -> (R) it.getPayload());
+    }
+
+    private Mono<? extends CommandResultMessage<?>> mapExceptionalResult(CommandResultMessage<?> response) {
+        return response.isExceptional() ? Mono.error(response.exceptionResult()) : Mono.just(response);
     }
 
     /**

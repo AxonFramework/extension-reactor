@@ -2,19 +2,15 @@ package org.axonframework.extensions.reactor.queryhandling.gateway;
 
 import org.axonframework.common.Registration;
 import org.axonframework.messaging.MessageHandler;
+import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
 import org.axonframework.messaging.responsetypes.ResponseTypes;
-import org.axonframework.queryhandling.GenericQueryMessage;
-import org.axonframework.queryhandling.GenericQueryResponseMessage;
-import org.axonframework.queryhandling.GenericSubscriptionQueryMessage;
-import org.axonframework.queryhandling.QueryMessage;
-import org.axonframework.queryhandling.QueryUpdateEmitter;
-import org.axonframework.queryhandling.SimpleQueryBus;
-import org.axonframework.queryhandling.SubscriptionQueryMessage;
-import org.axonframework.queryhandling.SubscriptionQueryResult;
-import org.junit.jupiter.api.*;
-import org.junit.jupiter.api.extension.*;
-import org.mockito.junit.jupiter.*;
+import org.axonframework.queryhandling.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Hooks;
 import reactor.core.publisher.Mono;
@@ -37,6 +33,7 @@ import static org.axonframework.common.ReflectionUtils.methodOf;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static reactor.util.context.Context.of;
 
 /**
  * Tests for {@link DefaultReactorQueryGateway}.
@@ -128,9 +125,10 @@ class DefaultReactorQueryGatewayTest {
 
     @Test
     void testQueryWithContext() throws Exception {
-        Context context = Context.of("k1", "v1");
+        Context context = of(MetaData.class, MetaData.with("k","v"));
 
-        Mono<String> result = reactiveQueryGateway.query("criteria", String.class).subscriberContext(context);
+        Mono<String> result = reactiveQueryGateway.query("criteria", String.class)
+                .subscriberContext(context);
 
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
@@ -140,6 +138,33 @@ class DefaultReactorQueryGatewayTest {
                     .containsOnly(context)
                     .then()
                     .verifyComplete();
+        verify(queryMessageHandler1).handle(any());
+
+        ArgumentCaptor<QueryMessage> queryMessageCaptor =  ArgumentCaptor.forClass(QueryMessage.class);
+
+
+        verify(queryBus).query(queryMessageCaptor.capture());
+        QueryMessage queryMessage = queryMessageCaptor.getValue();
+
+        assertTrue(queryMessage.getMetaData().containsKey("k"));
+        assertTrue(queryMessage.getMetaData().containsValue("v"));
+
+    }
+
+    @Test
+    void testCommandSetMetaDataViaContext() throws Exception {
+        Context context = Context.of("k1", "v1");
+
+        Mono<String> result = reactiveQueryGateway.query("criteria", String.class).subscriberContext(context);
+
+        verifyNoMoreInteractions(queryMessageHandler1);
+        verifyNoMoreInteractions(queryMessageHandler2);
+        StepVerifier.create(result)
+                .expectNext("handled")
+                .expectAccessibleContext()
+                .containsOnly(context)
+                .then()
+                .verifyComplete();
         verify(queryMessageHandler1).handle(any());
     }
 

@@ -52,4 +52,5 @@ public interface ReactorCommandGateway extends ReactorMessageDispatchInterceptor
         return Flux.from(commands)
                    .concatMap(this::send);
     }
+
 }

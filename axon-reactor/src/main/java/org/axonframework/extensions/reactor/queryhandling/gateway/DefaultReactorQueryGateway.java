@@ -4,18 +4,10 @@ import org.axonframework.common.AxonConfigurationException;
 import org.axonframework.common.Registration;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
 import org.axonframework.extensions.reactor.messaging.ReactorResultHandlerInterceptor;
+import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
 import org.axonframework.messaging.responsetypes.ResponseType;
-import org.axonframework.queryhandling.DefaultSubscriptionQueryResult;
-import org.axonframework.queryhandling.GenericQueryMessage;
-import org.axonframework.queryhandling.GenericSubscriptionQueryMessage;
-import org.axonframework.queryhandling.QueryBus;
-import org.axonframework.queryhandling.QueryMessage;
-import org.axonframework.queryhandling.QueryResponseMessage;
-import org.axonframework.queryhandling.SubscriptionQueryBackpressure;
-import org.axonframework.queryhandling.SubscriptionQueryMessage;
-import org.axonframework.queryhandling.SubscriptionQueryResult;
-import org.axonframework.queryhandling.SubscriptionQueryUpdateMessage;
+import org.axonframework.queryhandling.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
@@ -91,14 +83,27 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
 
     @Override
     public <R, Q> Mono<R> query(String queryName, Q query, ResponseType<R> responseType) {
-        return Mono.<QueryMessage<?, ?>>fromCallable(() -> new GenericQueryMessage<>(asMessage(query),
-                                                                                     queryName,
-                                                                                     responseType))
+        return createQueryMessage(queryName, query, responseType)
                 .transform(this::processDispatchInterceptors)
                 .flatMap(this::dispatchQuery)
                 .flatMapMany(this::processResultsInterceptors)
                 .<R>transform(this::getPayload)
                 .next();
+    }
+
+
+    public <R, Q> Mono<QueryMessage<?, ?>> createQueryMessage(String queryName, Q query, ResponseType<R> responseType) {
+        return Mono.fromCallable(() -> new GenericQueryMessage<>(asMessage(query), queryName, responseType))
+                .zipWith(metaDataFromContext())
+                .map(queryAndMeta -> queryAndMeta.getT1().andMetaData(queryAndMeta.getT2()));
+    }
+
+
+    private Mono<MetaData> metaDataFromContext() {
+        return Mono.subscriberContext()
+                .handle((ctx,sink) -> sink.next(Objects.requireNonNull(
+                        ctx.getOrDefault(MetaData.class, MetaData.emptyInstance())
+                )));
     }
 
     @Override
