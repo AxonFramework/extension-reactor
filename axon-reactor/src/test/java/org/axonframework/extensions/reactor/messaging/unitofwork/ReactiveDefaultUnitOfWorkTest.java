@@ -31,7 +31,8 @@ import java.time.Duration;
 import java.util.LinkedList;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -140,6 +141,42 @@ class ReactiveDefaultUnitOfWorkTest {
                 .as(StepVerifier::create)
                 .assertNext(r -> assertEquals(r.getPayload(), "executed"))
                 .verifyComplete();
+    }
+
+    @Test
+    void executeOnPrepareCommitOrNow() {
+        AtomicBoolean prepareCommit = new AtomicBoolean(false);
+
+        Mono<Void> scheduleTaskOnPrepareCommit = Mono.fromRunnable(() -> prepareCommit.set(true))
+                .then()
+                .delaySubscription(Duration.ofSeconds(1))
+                .as(UnitOfWorkOperators::onPrepareCommitOrNow); //execute this Mono on prepare commit or now
+
+        DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
+                .flatMap(uow-> scheduleTaskOnPrepareCommit.then(uow.commit()))
+                .as(UnitOfWorkOperators::executionContext)
+                .as(StepVerifier::create)
+                .verifyComplete();
+
+        assertTrue(prepareCommit.get());
+    }
+
+    @Test
+    void executeAfterCommitOrNow() {
+        AtomicBoolean afterCommit = new AtomicBoolean(false);
+
+        Mono<Void> scheduleTaskAfterCommit = Mono.fromRunnable(() -> afterCommit.set(true))
+                .then()
+                .delaySubscription(Duration.ofSeconds(1))
+                .as(UnitOfWorkOperators::onAfterCommitOrNow); //execute this Mono on after commit or now
+
+        DefaultReactiveUnitOfWork.startAndGet(genericCommandMessage)
+                .flatMap(uow-> scheduleTaskAfterCommit.then(uow.commit()))
+                .as(UnitOfWorkOperators::executionContext)
+                .as(StepVerifier::create)
+                .verifyComplete();
+
+        assertTrue(afterCommit.get());
     }
 
     @Test

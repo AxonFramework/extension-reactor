@@ -45,7 +45,7 @@ class BatchingReactiveUnitOfWorkTest {
     private List<PhaseTransition> transitions;
     private BatchingReactiveUnitOfWork<?> subject;
 
-    private static Message<?> toMessage(Object payload) {
+    private static Message<Integer> toMessage(Integer payload) {
         return new GenericMessage<>(payload);
     }
 

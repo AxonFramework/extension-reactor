@@ -356,7 +356,7 @@ public interface ReactiveUnitOfWork<T extends Message<?>> {
     default <R> Mono<Void> execute(Function<T, Mono<R>> task, RollbackConfiguration rollbackConfiguration) {
         return executeWithResult(task, rollbackConfiguration)
                 .flatMap(result -> result.isExceptional()
-                        ? Mono.error(new RuntimeException(result.exceptionResult())) :
+                        ? Mono.error(result.exceptionResult()) :
                         Mono.empty())
                 .then();
     }

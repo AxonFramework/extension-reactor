@@ -253,8 +253,10 @@ public abstract class AbstractReactiveUnitOfWork<T extends Message<?>> implement
      */
     protected Mono<Void> changePhase(ReactiveUnitOfWork.Phase... phases) {
         return Flux.fromArray(phases)
-                .doOnNext(this::setPhase)
-                .concatMap(this::notifyHandlers)
+                .concatMap(phase->{
+                    setPhase(phase);
+                    return notifyHandlers(phase);
+                })
                 .then();
     }
 
