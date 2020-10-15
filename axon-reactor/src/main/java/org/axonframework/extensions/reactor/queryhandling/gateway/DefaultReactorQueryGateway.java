@@ -205,8 +205,8 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
                 .map(it -> (R) it.getPayload());
     }
 
-    private Flux<? extends ResultMessage<?>> mapExceptionalResult(ResultMessage<?> response) {
-        return response.isExceptional() ? Flux.error(response.exceptionResult()) : Flux.just(response);
+    private Flux<? extends ResultMessage<?>> mapExceptionalResult(ResultMessage<?> result) {
+        return result.isExceptional() ? Flux.error(result.exceptionResult()) : Flux.just(result);
     }
 
     /**
