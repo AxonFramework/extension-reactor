@@ -9,6 +9,7 @@ import org.axonframework.commandhandling.gateway.DefaultCommandGateway;
 import org.axonframework.commandhandling.gateway.RetryScheduler;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
 import org.axonframework.messaging.MessageDispatchInterceptor;
+import org.axonframework.messaging.ResultMessage;
 import org.junit.jupiter.api.*;
 import reactor.test.StepVerifier;
 
@@ -55,10 +56,10 @@ class ReactorCallbackTest {
         RuntimeException exception = new RuntimeException();
         testSubject.onResult(COMMAND_MESSAGE, asCommandResultMessage(exception));
 
-        StepVerifier.create(testSubject)
+        StepVerifier.create(testSubject.map(ResultMessage::isExceptional))
                     .expectSubscription()
-                    .expectError(RuntimeException.class)
-                    .verify();
+                    .expectNext(true)
+                    .verifyComplete();
     }
 
     @Test

@@ -163,6 +163,24 @@ class DefaultReactorCommandGatewayTest {
     }
 
     @Test
+    void testResultOnErrorMapping() {
+        commandBus = new CommandBusStub(GenericCommandResultMessage
+                .asCommandResultMessage(new RuntimeException("oops")));
+        gateway = DefaultReactorCommandGateway.builder()
+                .commandBus(commandBus)
+                .build();
+
+        gateway.registerResultHandlerInterceptor((command, results) -> results
+                .onErrorMap(t -> new MockException()));
+
+        Mono<String> result = gateway.send("");
+
+        StepVerifier.create(result)
+                .expectError(MockException.class)
+                .verify();
+    }
+
+    @Test
     void testCommandMessageAlteration() {
         registerResultMapping(gateway, (command, result) ->
                 command.getMetaData()
@@ -208,4 +226,6 @@ class DefaultReactorCommandGatewayTest {
                                        Predicate<CommandResultMessage<?>> predicate) {
         gateway.registerResultHandlerInterceptor((command, flux) -> flux.filter(predicate));
     }
+
+    private static class MockException extends RuntimeException{};
 }

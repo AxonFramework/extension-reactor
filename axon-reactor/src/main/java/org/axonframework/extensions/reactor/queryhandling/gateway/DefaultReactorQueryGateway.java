@@ -167,7 +167,8 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
     private Flux<ResultMessage<?>> processResultsInterceptors(
             Tuple2<QueryMessage<?, ?>, Flux<ResultMessage<?>>> queryWithResponses) {
         QueryMessage<?, ?> queryMessage = queryWithResponses.getT1();
-        Flux<ResultMessage<?>> queryResultMessage = queryWithResponses.getT2();
+        Flux<ResultMessage<?>> queryResultMessage = queryWithResponses.getT2()
+                .flatMapSequential(this::mapExceptionalResult);
 
         return Flux.fromIterable(resultInterceptors)
                    .reduce(queryResultMessage,
@@ -200,13 +201,12 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
     @SuppressWarnings("unchecked")
     private <R> Flux<R> getPayload(Flux<ResultMessage<?>> resultMessageFlux) {
         return resultMessageFlux
-                .flatMap(this::mapResult)
                 .filter(r -> Objects.nonNull(r.getPayload()))
                 .map(it -> (R) it.getPayload());
     }
 
-    private Flux<? extends ResultMessage<?>> mapResult(ResultMessage<?> response) {
-        return response.isExceptional() ? Flux.error(response.exceptionResult()) : Flux.just(response);
+    private Flux<? extends ResultMessage<?>> mapExceptionalResult(ResultMessage<?> result) {
+        return result.isExceptional() ? Flux.error(result.exceptionResult()) : Flux.just(result);
     }
 
     /**

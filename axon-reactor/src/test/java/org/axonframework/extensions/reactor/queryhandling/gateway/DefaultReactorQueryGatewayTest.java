@@ -213,6 +213,16 @@ class DefaultReactorQueryGatewayTest {
     }
 
     @Test
+    void testQueryWithErrorDispatchInterceptor() {
+        reactiveQueryGateway
+                .registerResultHandlerInterceptor((q,r) -> r.onErrorMap(t-> new MockException()));
+
+
+        StepVerifier.create(reactiveQueryGateway.query(5, Integer.class)) //throws Runtime exception by default
+                .verifyError(MockException.class);
+    }
+
+    @Test
     void testQueryWithDispatchInterceptorWithContext() {
         Context context = Context.of("security", true);
 
@@ -767,4 +777,6 @@ class DefaultReactorQueryGatewayTest {
                     .expectNext("value1", "value2", "value3", "update1", "update2", "update3", "update4", "update5")
                     .verifyComplete();
     }
+
+    private static class MockException extends RuntimeException{};
 }

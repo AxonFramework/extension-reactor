@@ -1,17 +1,13 @@
 package org.axonframework.extensions.reactor.commandhandling.gateway;
 
-import org.axonframework.commandhandling.CommandBus;
-import org.axonframework.commandhandling.CommandCallback;
-import org.axonframework.commandhandling.CommandMessage;
-import org.axonframework.commandhandling.CommandResultMessage;
-import org.axonframework.commandhandling.GenericCommandMessage;
+import org.axonframework.commandhandling.*;
 import org.axonframework.commandhandling.gateway.RetryScheduler;
 import org.axonframework.commandhandling.gateway.RetryingCallback;
 import org.axonframework.common.AxonConfigurationException;
 import org.axonframework.common.Registration;
+import org.axonframework.extensions.reactor.commandhandling.callbacks.ReactorCallback;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
 import org.axonframework.extensions.reactor.messaging.ReactorResultHandlerInterceptor;
-import org.axonframework.extensions.reactor.commandhandling.callbacks.ReactorCallback;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.function.Tuple2;
@@ -112,7 +108,9 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
     private <C> Mono<? extends CommandResultMessage<?>> processResultsInterceptors(
             Tuple2<CommandMessage<C>, Flux<CommandResultMessage<?>>> commandWithResults) {
         CommandMessage<?> commandMessage = commandWithResults.getT1();
-        Flux<CommandResultMessage<?>> commandResultMessages = commandWithResults.getT2();
+        Flux<CommandResultMessage<?>> commandResultMessages = commandWithResults.getT2()
+                .flatMapSequential(this::mapExceptionalResult);
+
         return Flux.fromIterable(resultInterceptors)
                    .reduce(commandResultMessages,
                            (result, interceptor) -> interceptor.intercept(commandMessage, result))
@@ -124,6 +122,10 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
         return commandResultMessage
                 .filter(r -> Objects.nonNull(r.getPayload()))
                 .map(it -> (R) it.getPayload());
+    }
+
+    private Mono<? extends CommandResultMessage<?>> mapExceptionalResult(CommandResultMessage<?> result) {
+        return result.isExceptional() ? Mono.error(result.exceptionResult()) : Mono.just(result);
     }
 
     /**
