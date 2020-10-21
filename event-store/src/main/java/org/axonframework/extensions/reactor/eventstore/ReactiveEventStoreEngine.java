@@ -2,6 +2,7 @@ package org.axonframework.extensions.reactor.eventstore;
 
 import org.axonframework.eventhandling.DomainEventMessage;
 import org.axonframework.eventhandling.EventMessage;
+import org.axonframework.eventhandling.TrackedEventMessage;
 import org.axonframework.eventhandling.TrackingToken;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -14,12 +15,14 @@ import java.util.List;
  * @date 2020-09-28
  */
 public interface ReactiveEventStoreEngine {
-    Mono<Void> appendEvents(EventMessage<?>... events);
-
-    Mono<Void> storeSnapshot(DomainEventMessage<?> snapshot);
 
 
-    Mono<Void> appendEvents(Flux<? extends EventMessage<?>> events);
+    Mono<Void> storeSnapshot(Mono<DomainEventMessage<?>> snapshot);
+
+
+    Flux<? extends TrackedEventMessage<?>> readEvents(TrackingToken trackingToken);
+
+    Mono<Void> appendEvents(List<? extends EventMessage<?>> events);
 
     default Flux<DomainEventMessage<?>> readEvents(String aggregateIdentifier) {
         return readEvents(aggregateIdentifier, 0);
