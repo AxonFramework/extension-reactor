@@ -5,12 +5,10 @@ import org.axonframework.eventhandling.*;
 import org.axonframework.eventsourcing.eventstore.EventStoreException;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
 import org.axonframework.extensions.reactor.eventstore.ReactiveEventStoreEngine;
-import org.axonframework.extensions.reactor.eventstore.statements.R2dbcAppendEventStatementBuilder;
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventEntryMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventMapper;
 import org.axonframework.extensions.reactor.eventstore.statements.R2dbcStatementBuilders;
 import org.axonframework.serialization.Serializer;
-import org.springframework.data.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -30,8 +28,6 @@ import static java.lang.String.format;
 public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
 
     private final ConnectionFactory connectionFactory;
-    private final R2dbcAppendEventStatementBuilder r2dbcAppendEventStatementBuilder;
-    private final DatabaseClient databaseClient;
     private final EventSchema eventSchema;
     private final Class<?> dataType;
     private final Serializer serializer;
@@ -39,22 +35,18 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
 
 
     public R2dbcEventStoreEngine(ConnectionFactory connectionFactory,
-                                 R2dbcAppendEventStatementBuilder r2dbcAppendEventStatementBuilder,
                                  EventSchema eventSchema,
-                                 Class<?> dataType, Serializer serializer,
-                                 DomainEventEntryMapper domainEventEntryMapper) {
+                                 Class<?> dataType, Serializer serializer) {
         this.connectionFactory = connectionFactory;
-        this.r2dbcAppendEventStatementBuilder = r2dbcAppendEventStatementBuilder;
         this.dataType = dataType;
         this.serializer = serializer;
-        this.domainEventEntryMapper = domainEventEntryMapper;
-        this.databaseClient = DatabaseClient.create(this.connectionFactory);
+        this.domainEventEntryMapper = new DomainEventEntryMapper(eventSchema);
         this.eventSchema = eventSchema;
     }
 
 
     @Override
-    public Mono<Void> storeSnapshot(Mono<DomainEventMessage<?>> snapshot) {
+    public Mono<Void> storeSnapshot(DomainEventMessage<?> snapshot) {
         return Mono.error(new UnsupportedOperationException());
     }
 

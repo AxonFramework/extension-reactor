@@ -17,7 +17,7 @@ import java.util.List;
 public interface ReactiveEventStoreEngine {
 
 
-    Mono<Void> storeSnapshot(Mono<DomainEventMessage<?>> snapshot);
+    Mono<Void> storeSnapshot(DomainEventMessage<?> snapshot);
 
 
     Flux<? extends TrackedEventMessage<?>> readEvents(TrackingToken trackingToken);
