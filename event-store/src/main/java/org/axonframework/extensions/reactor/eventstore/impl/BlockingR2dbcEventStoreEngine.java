@@ -64,7 +64,7 @@ public class BlockingR2dbcEventStoreEngine implements EventStorageEngine {
 
     @Override
     public Optional<Long> lastSequenceNumberFor(String aggregateIdentifier) {
-        return Optional.ofNullable(reactiveEventStoreEngine.lastSequenceNumberFor(aggregateIdentifier).block());
+        return reactiveEventStoreEngine.lastSequenceNumberFor(aggregateIdentifier).block();
     }
 
     @Override

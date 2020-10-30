@@ -1,6 +1,7 @@
 package org.axonframework.extensions.reactor.eventstore.impl;
 
 import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.spi.Statement;
 import org.axonframework.eventhandling.*;
 import org.axonframework.eventsourcing.eventstore.EventStoreException;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
@@ -9,6 +10,7 @@ import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventEntryM
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventMapper;
 import org.axonframework.extensions.reactor.eventstore.statements.R2dbcStatementBuilders;
 import org.axonframework.serialization.Serializer;
+import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -18,6 +20,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static java.lang.String.format;
+import static org.axonframework.common.DateTimeUtils.formatInstant;
 
 /**
  * @author vtiwar27
@@ -32,7 +35,8 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
     private final Class<?> dataType;
     private final Serializer serializer;
     private final DomainEventEntryMapper domainEventEntryMapper;
-
+    private final DatabaseClient databaseClient;
+    private final int batchSize = 1;
 
     public R2dbcEventStoreEngine(ConnectionFactory connectionFactory,
                                  EventSchema eventSchema,
@@ -42,6 +46,8 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
         this.serializer = serializer;
         this.domainEventEntryMapper = new DomainEventEntryMapper(eventSchema);
         this.eventSchema = eventSchema;
+        this.databaseClient = DatabaseClient.create(connectionFactory);
+
     }
 
 
@@ -62,93 +68,68 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
 
     @Override
     public Mono<Void> appendEvents(List<? extends EventMessage<?>> events) {
-        return Mono.from(connectionFactory.create()).flatMap(c -> Mono.from(c.beginTransaction()).then(
-                Mono.from(R2dbcStatementBuilders.getAppendEventStatement(c, events, this.eventSchema, serializer, dataType)
-                        .execute())
-                        .delayUntil(r -> c.commitTransaction())
-                        .doFinally((st) -> c.close()))).then();
+        return this.databaseClient.inConnectionMany((connection -> {
+            final Statement statement = R2dbcStatementBuilders.getAppendEventStatement(connection, events,
+                    this.eventSchema, serializer, dataType);
+            return Flux.from(statement.execute()).flatMap(result -> result.map((row, rowMetadata) -> ""));
+        })).then();
     }
 
 
     @Override
     public Flux<DomainEventMessage<?>> readEvents(String aggregateIdentifier, long firstSequenceNumber) {
-        return Flux.from(connectionFactory.create()).flatMap(c -> Flux.from(c.beginTransaction()).thenMany(
-                Flux.from(R2dbcStatementBuilders.getEventsStatement(c, eventSchema, 100, aggregateIdentifier, firstSequenceNumber)
-                        .execute())
-                        .delayUntil(r -> c.commitTransaction())
-                        .flatMap(r -> r.map(this.domainEventEntryMapper::map))
-                        .map(DomainEventMapper::map)
-                        .doFinally((st) -> c.close())));
+
+        return this.databaseClient
+                .sql(R2dbcStatementBuilders.getEventsStatement(eventSchema))
+                .bind("$1", aggregateIdentifier)
+                .bind("$2", firstSequenceNumber)
+                .bind("$3", (firstSequenceNumber + this.batchSize))
+                .map(this.domainEventEntryMapper::map)
+                .all()
+                .map(DomainEventMapper::map);
     }
 
 
     @Override
-    public Mono<Long> lastSequenceNumberFor(String aggregateIdentifier) {
-        return Mono.from(connectionFactory.create()).flatMap(c ->
-                Mono.from(c.beginTransaction()).then(
-                        Mono.from(R2dbcStatementBuilders.lastSequenceNumberFor(c, this.eventSchema, aggregateIdentifier)
-                                .execute())
-                                .delayUntil(r -> c.commitTransaction())
-                                .map(r -> r.map(((row, rowMetadata) -> row.get(0, Long.class))))
-                                .flatMap(Mono::from)
-                                .onErrorResume((error) ->
-                                        Mono.error(new EventStoreException(format("Failed to read events for aggregate [%s]", aggregateIdentifier), error)))
-                                .doFinally((st) -> c.close())));
+    public Mono<Optional<Long>> lastSequenceNumberFor(String aggregateIdentifier) {
+        return this.databaseClient.sql(R2dbcStatementBuilders.lastSequenceNumberFor(eventSchema)).bind("$1", aggregateIdentifier)
+                .map((res, metadata) -> Optional.ofNullable(res.get(0, Long.class))).first();
+
 
     }
 
     @Override
     public Mono<TrackingToken> createTailToken() {
-        return Mono.from(connectionFactory.create()).flatMap(c -> Mono.from(c.beginTransaction()).then(
-                Mono.from(R2dbcStatementBuilders.createTailToken(c, this.eventSchema)
-                        .execute())
-                        .delayUntil(r -> c.commitTransaction())
-                        .map(r -> r.map(((row, rowMetadata) -> row.get(0, Long.class))))
-                        .flatMap(Mono::from)
-                        .map(index -> Optional.ofNullable(index)
-                                .map(seq -> GapAwareTrackingToken.
-                                        newInstance(seq, Collections.emptySet()))
-                                .orElse(null))
-                        .onErrorResume((error) ->
-                                Mono.error(new EventStoreException("Failed to get tail token", error)))
-                        .doFinally((st) -> c.close())));
-
+        return this.databaseClient.sql(R2dbcStatementBuilders.createTailToken(eventSchema))
+                .map((res, metadata) -> Optional.ofNullable(res.get(0, Long.class))).first().map(index -> index.map(seq -> GapAwareTrackingToken.
+                        newInstance(seq, Collections.emptySet())).orElse(null)).cast(TrackingToken.class).onErrorResume((error) ->
+                        Mono.error(new EventStoreException("Failed to get tail token", error)));
     }
 
     @Override
     public Mono<TrackingToken> createHeadToken() {
-        return Mono.from(connectionFactory.create()).flatMap(c -> Mono.from(c.beginTransaction()).then(
-                Mono.from(R2dbcStatementBuilders.createHeadToken(c, this.eventSchema)
-                        .execute())
-                        .delayUntil(r -> c.commitTransaction())
-                        .map(r -> r.map(((row, rowMetadata) -> row.get(0, Long.class))))
-                        .flatMap(Mono::from)
-                        .map(index -> Optional.ofNullable(index)
-                                .map(seq -> GapAwareTrackingToken.
-                                        newInstance(seq, Collections.emptySet()))
-                                .orElse(null))
-                        .onErrorResume((error) ->
-                                Mono.error(new EventStoreException("Failed to get head token", error)))
-                        .doFinally((st) -> c.close())));
+        return this.databaseClient.sql(R2dbcStatementBuilders.createHeadToken(eventSchema))
+                .map((res, metadata) -> Optional.ofNullable(res.get(0, Long.class))).first().map(index -> index.map(seq -> GapAwareTrackingToken.
+                        newInstance(seq, Collections.emptySet())).orElse(null)).cast(TrackingToken.class).onErrorResume((error) ->
+                        Mono.error(new EventStoreException("Failed to get head token", error)));
 
     }
 
     @Override
     public Mono<TrackingToken> createTokenAt(Instant dateTime) {
-        return Mono.from(connectionFactory.create()).flatMap(c -> Mono.from(c.beginTransaction()).then(
-                Mono.from(R2dbcStatementBuilders.createTokenAt(c, this.eventSchema, dateTime)
-                        .execute())
-                        .delayUntil(r -> c.commitTransaction())
-                        .map(r -> r.map(((row, rowMetadata) -> row.get(0, Long.class))))
-                        .flatMap(Mono::from)
-                        .map(index -> Optional.ofNullable(index)
-                                .map(seq -> GapAwareTrackingToken.
-                                        newInstance(seq, Collections.emptySet()))
-                                .orElse(null))
-                        .onErrorResume((error) ->
-                                Mono.error(new EventStoreException(format("Failed to get token at [%s]", dateTime), error)))
-                        .doFinally((st) -> c.close())));
+        return this.databaseClient.sql(R2dbcStatementBuilders.createTokenAt(eventSchema, dateTime)).bind("$1", formatInstant(dateTime))
+                .map((res, metadata) -> Optional.ofNullable(res.get(0, Long.class))).first().map(index -> index.map(seq -> GapAwareTrackingToken.
+                        newInstance(seq, Collections.emptySet())).orElse(null)).cast(TrackingToken.class).onErrorResume((error) ->
+                        Mono.error(new EventStoreException(format("Failed to get token at [%s]", dateTime), error)));
     }
 
+
+    public Mono<Void> createSchema() {
+        return Mono.from(connectionFactory.create()).flatMap(c -> Mono.from(c.beginTransaction()).then(
+                Mono.from(R2dbcStatementBuilders.createDomainEventTable(c, this.eventSchema)
+                        .execute())
+                        .delayUntil(r -> c.commitTransaction())
+                        .doFinally((st) -> c.close()))).then();
+    }
 
 }

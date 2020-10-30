@@ -8,12 +8,12 @@ import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
 import org.axonframework.serialization.SerializedObject;
 import org.axonframework.serialization.Serializer;
 
+import java.sql.PreparedStatement;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.Collections;
 import java.util.List;
 
-import static org.axonframework.common.DateTimeUtils.formatInstant;
 import static org.axonframework.eventhandling.EventUtils.asDomainEventMessage;
 
 /**
@@ -26,46 +26,41 @@ public class R2dbcStatementBuilders {
                                                     Serializer serializer, Class<?> dataType) {
         final Statement statement = connection.createStatement("INSERT INTO " +
                 eventSchema.domainEventTable() + " (" + eventSchema.domainEventFields()
-                + ") VALUES (?,?,?,?,?,?,?,?,?)");
+                + ") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)");
         events.forEach(eventMessage -> {
             DomainEventMessage<?> event = asDomainEventMessage(eventMessage);
             SerializedObject<?> payload = event.serializePayload(serializer, dataType);
             SerializedObject<?> metaData = event.serializeMetaData(serializer, dataType);
-            statement.bind(1, event.getIdentifier());
-            statement.bind(2, event.getAggregateIdentifier());
-            statement.bind(3, event.getSequenceNumber());
-            statement.bind(4, event.getType());
-            statement.bind(5, event.getTimestamp());
-            statement.bind(6, payload.getType().getName());
-            statement.bind(7, payload.getType().getRevision());
-            statement.bind(8, payload.getData());
-            statement.bind(9, metaData.getData());
+            statement.bind("$1", event.getIdentifier());
+            statement.bind("$2", event.getAggregateIdentifier());
+            statement.bind("$3", event.getSequenceNumber());
+            statement.bind("$4", event.getType());
+            statement.bind("$5", event.getTimestamp());
+            statement.bind("$6", payload.getType().getName());
+            statement.bind("$7", "");
+            statement.bind("$8", payload.getData());
+            statement.bind("$9", metaData.getData());
             statement.add();
         });
-
+        statement.fetchSize(1);
         return statement;
     }
 
-    public static Statement getEventsStatement(Connection connection,
-                                               EventSchema schema, int batchSize, String aggregateIdentifier, long firstSequenceNumber) {
+    public static String getEventsStatement(EventSchema schema) {
         final String sql =
                 "SELECT " + schema.trackedEventFields() + " FROM " + schema.domainEventTable() + " WHERE " + schema
-                        .aggregateIdentifierColumn() + " = ? AND " + schema.sequenceNumberColumn() + " >= ? AND "
-                        + schema.sequenceNumberColumn() + " < ? ORDER BY "
+                        .aggregateIdentifierColumn() + " = $1 AND " + schema.sequenceNumberColumn() + " >= $2 AND "
+                        + schema.sequenceNumberColumn() + " < $3 ORDER BY "
                         + schema.sequenceNumberColumn() + " ASC";
-        final Statement statement = connection.createStatement(sql);
-        statement.bind(1, aggregateIdentifier);
-        statement.bind(2, firstSequenceNumber);
-        statement.bind(3, (firstSequenceNumber + batchSize));
-        return statement;
+        return sql;
     }
 
     public static Statement fetchTrackedEventsStatement(Connection connection, EventSchema schema, long index) {
         final String sql =
                 "SELECT min(" + schema.globalIndexColumn() + ") FROM " + schema.domainEventTable() + " WHERE "
-                        + schema.globalIndexColumn() + " > ?";
+                        + schema.globalIndexColumn() + " > $1";
         Statement statement = connection.createStatement(sql);
-        statement.bind(1, index);
+        statement.bind("$1", index);
         return statement;
     }
 
@@ -73,11 +68,11 @@ public class R2dbcStatementBuilders {
                                                      long globalIndex, int batchSize) throws SQLException {
         final String sql = "SELECT "
                 + schema.trackedEventFields() + " FROM " + schema.domainEventTable() + " WHERE ("
-                + schema.globalIndexColumn() + " > ? AND " + schema.globalIndexColumn()
-                + " <= ?) ORDER BY " + schema.globalIndexColumn() + " ASC";
+                + schema.globalIndexColumn() + " > $1 AND " + schema.globalIndexColumn()
+                + " <= $2) ORDER BY " + schema.globalIndexColumn() + " ASC";
         Statement statement = connection.createStatement(sql);
-        statement.bind(1, globalIndex);
-        statement.bind(2, globalIndex + batchSize);
+        statement.bind("$1", globalIndex);
+        statement.bind("$2", globalIndex + batchSize);
         return statement;
     }
 
@@ -86,12 +81,12 @@ public class R2dbcStatementBuilders {
         final Integer gapSize = gaps.size();
         final String sql =
                 "SELECT " + schema.trackedEventFields() + " FROM " + schema.domainEventTable() + " WHERE ("
-                        + schema.globalIndexColumn() + " > ? AND " + schema.globalIndexColumn() + " <= ?) OR "
+                        + schema.globalIndexColumn() + " > $1 AND " + schema.globalIndexColumn() + " <= $2) OR "
                         + schema.globalIndexColumn() + " IN (" + String.join(",", Collections.nCopies(gapSize, "?"))
                         + ") ORDER BY " + schema.globalIndexColumn() + " ASC";
         Statement statement = connection.createStatement(sql);
-        statement.bind(1, globalIndex);
-        statement.bind(2, globalIndex + batchSize);
+        statement.bind("$1", globalIndex);
+        statement.bind("$2", globalIndex + batchSize);
         for (int i = 0; i < gapSize; i++) {
             statement.bind(i + 3, gaps.get(i));
         }
@@ -99,34 +94,81 @@ public class R2dbcStatementBuilders {
     }
 
 
-    public static Statement lastSequenceNumberFor(Connection connection, EventSchema schema,
-                                                  String aggregateIdentifier) {
-        final String sql = "SELECT max("
+    public static String lastSequenceNumberFor(EventSchema schema) {
+        return "SELECT max("
                 + schema.sequenceNumberColumn() + ") FROM " + schema.domainEventTable() + " WHERE "
-                + schema.aggregateIdentifierColumn() + " = ?";
-        Statement statement = connection.createStatement(sql);
-        statement.bind(1, aggregateIdentifier);
-        return statement;
+                + schema.aggregateIdentifierColumn() + " = $1";
     }
 
 
-    public static Statement createTailToken(Connection connection, EventSchema schema) {
+    public static String createTailToken(EventSchema schema) {
         final String sql = "SELECT min(" + schema.globalIndexColumn() + ") - 1 FROM " + schema.domainEventTable();
-        return connection.createStatement(sql);
+        return sql;
     }
 
 
-    public static Statement createHeadToken(Connection connection, EventSchema schema) {
+    public static String createHeadToken(EventSchema schema) {
         final String sql = "SELECT max(" + schema.globalIndexColumn() + ") FROM " + schema.domainEventTable();
-        return connection.createStatement(sql);
+        return sql;
     }
 
-    public static Statement createTokenAt(Connection connection, EventSchema schema, Instant dateTime) {
+    public static String createTokenAt(EventSchema schema, Instant dateTime) {
         final String sql =
                 "SELECT min(" + schema.globalIndexColumn() + ") - 1 FROM " + schema.domainEventTable() + " WHERE "
-                        + schema.timestampColumn() + " >= ?";
-        Statement statement = connection.createStatement(sql);
-        statement.bind(1, formatInstant(dateTime));
-        return statement;
+                        + schema.timestampColumn() + " >= $1";
+        //statement.bind("$1", formatInstant(dateTime));
+        return sql;
+    }
+
+
+    public static Statement createDomainEventTable(Connection connection,
+                                                   EventSchema schema) {
+        String sql = "CREATE TABLE IF NOT EXISTS " + schema.domainEventTable() + " (\n" +
+                schema.globalIndexColumn() + " " + idColumnType() + " NOT NULL,\n" +
+                schema.aggregateIdentifierColumn() + " VARCHAR(255) NOT NULL,\n" +
+                schema.sequenceNumberColumn() + " BIGINT NOT NULL,\n" +
+                schema.typeColumn() + " VARCHAR(255),\n" +
+                schema.eventIdentifierColumn() + " VARCHAR(255) NOT NULL,\n" +
+                schema.metaDataColumn() + " " + payloadType() + ",\n" +
+                schema.payloadColumn() + " " + payloadType() + " NOT NULL,\n" +
+                schema.payloadRevisionColumn() + " VARCHAR(255),\n" +
+                schema.payloadTypeColumn() + " VARCHAR(255) NOT NULL,\n" +
+                schema.timestampColumn() + " VARCHAR(255) NOT NULL,\n" +
+                "PRIMARY KEY (" + schema.globalIndexColumn() + "),\n" +
+                "UNIQUE (" + schema.aggregateIdentifierColumn() + ", " +
+                schema.sequenceNumberColumn() + "),\n" +
+                "UNIQUE (" + schema.eventIdentifierColumn() + ")\n" +
+                ")";
+        return connection.createStatement(sql);
+    }
+
+
+    public static PreparedStatement createSnapshotEventTable(java.sql.Connection connection,
+                                                             EventSchema schema) throws SQLException {
+        String sql = "CREATE TABLE IF NOT EXISTS " + schema.snapshotTable() + " (\n" +
+                schema.aggregateIdentifierColumn() + " VARCHAR(255) NOT NULL,\n" +
+                schema.sequenceNumberColumn() + " BIGINT NOT NULL,\n" +
+                schema.typeColumn() + " VARCHAR(255) NOT NULL,\n" +
+                schema.eventIdentifierColumn() + " VARCHAR(255) NOT NULL,\n" +
+                schema.metaDataColumn() + " " + payloadType() + ",\n" +
+                schema.payloadColumn() + " " + payloadType() + " NOT NULL,\n" +
+                schema.payloadRevisionColumn() + " VARCHAR(255),\n" +
+                schema.payloadTypeColumn() + " VARCHAR(255) NOT NULL,\n" +
+                schema.timestampColumn() + " VARCHAR(255) NOT NULL,\n" +
+                "PRIMARY KEY (" + schema.aggregateIdentifierColumn() + ", " +
+                schema.sequenceNumberColumn() + "),\n" +
+                "UNIQUE (" + schema.eventIdentifierColumn() + ")\n" +
+                ")";
+        return connection.prepareStatement(sql);
+    }
+
+
+    private static String idColumnType() {
+        return "BIGSERIAL";
+    }
+
+
+    private static String payloadType() {
+        return "bytea";
     }
 }

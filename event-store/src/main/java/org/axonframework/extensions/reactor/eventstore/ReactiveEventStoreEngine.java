@@ -9,6 +9,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * @author vtiwar27
@@ -32,7 +33,7 @@ public interface ReactiveEventStoreEngine {
 
     Mono<DomainEventMessage<?>> readSnapshot(String aggregateIdentifier);
 
-    Mono<Long> lastSequenceNumberFor(String aggregateIdentifier);
+    Mono<Optional<Long>> lastSequenceNumberFor(String aggregateIdentifier);
 
     Mono<TrackingToken> createTailToken();
 
