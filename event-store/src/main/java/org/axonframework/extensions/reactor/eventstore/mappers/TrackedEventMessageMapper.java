@@ -1,8 +1,9 @@
 package org.axonframework.extensions.reactor.eventstore.mappers;
 
-import org.axonframework.eventhandling.DomainEventData;
-import org.axonframework.eventhandling.DomainEventMessage;
-import org.axonframework.eventhandling.GenericDomainEventMessage;
+import org.axonframework.eventhandling.GenericTrackedDomainEventMessage;
+import org.axonframework.eventhandling.GenericTrackedEventMessage;
+import org.axonframework.eventhandling.TrackedEventData;
+import org.axonframework.eventhandling.TrackedEventMessage;
 import org.axonframework.serialization.LazyDeserializingObject;
 import org.axonframework.serialization.SerializedMessage;
 import org.axonframework.serialization.Serializer;
@@ -14,21 +15,21 @@ import java.util.stream.Stream;
 
 /**
  * @author vtiwar27
- * @date 2020-10-15
+ * @date 2020-11-03
  */
-public class DomainEventMapper {
+public class TrackedEventMessageMapper {
 
     private final Serializer serializer;
     private final EventUpcasterChain eventUpcasterChain;
 
-    public DomainEventMapper(Serializer serializer, EventUpcasterChain eventUpcasterChain) {
+    public TrackedEventMessageMapper(Serializer serializer,
+                                     EventUpcasterChain eventUpcasterChain) {
         this.serializer = serializer;
         this.eventUpcasterChain = eventUpcasterChain;
     }
 
 
-    public DomainEventMessage<?> map(DomainEventData row) {
-
+    public TrackedEventMessage<?> map(TrackedEventData row) {
         final InitialEventRepresentation initialEventRepresentation = new InitialEventRepresentation(row, serializer);
         final Stream<IntermediateEventRepresentation> upcast = eventUpcasterChain.
                 upcast(Stream.of(initialEventRepresentation));
@@ -39,15 +40,13 @@ public class DomainEventMapper {
                             ir.getType(), serializer),
                     ir.getMetaData());
             if (ir.getAggregateIdentifier().isPresent()) {
-                return new GenericDomainEventMessage<>(
+                return new GenericTrackedDomainEventMessage<>(ir.getTrackingToken().get(),
                         ir.getAggregateType().orElse(null),
                         ir.getAggregateIdentifier().get(),
                         ir.getSequenceNumber().get(), serializedMessage,
                         ir::getTimestamp);
             } else {
-                return new GenericDomainEventMessage<>(ir.getAggregateType().get(),
-                        ir.getAggregateIdentifier().get(),
-                        ir.getSequenceNumber().get(), serializedMessage,
+                return new GenericTrackedEventMessage<>(ir.getTrackingToken().get(), serializedMessage,
                         ir::getTimestamp);
             }
         }).findFirst().get();

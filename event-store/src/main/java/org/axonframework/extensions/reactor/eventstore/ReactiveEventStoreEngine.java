@@ -1,9 +1,6 @@
 package org.axonframework.extensions.reactor.eventstore;
 
-import org.axonframework.eventhandling.DomainEventMessage;
-import org.axonframework.eventhandling.EventMessage;
-import org.axonframework.eventhandling.TrackedEventMessage;
-import org.axonframework.eventhandling.TrackingToken;
+import org.axonframework.eventhandling.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -31,7 +28,15 @@ public interface ReactiveEventStoreEngine {
 
     Flux<DomainEventMessage<?>> readEvents(String aggregateIdentifier, long firstSequenceNumber);
 
-    Mono<DomainEventMessage<?>> readSnapshot(String aggregateIdentifier);
+    Flux<? extends TrackedEventData<?>> readEvents(TrackingToken trackingToken, int batchSize);
+
+    Flux<DomainEventMessage<?>> readSnapshot(String aggregateIdentifier);
+
+    Flux<DomainEventData<?>> readSnapshotData(String aggregateIdentifier);
+
+
+    Flux<? extends DomainEventData<?>> readEvents(String aggregateIdentifier, long firstSequenceNumber,
+                                                  int batchSize);
 
     Mono<Optional<Long>> lastSequenceNumberFor(String aggregateIdentifier);
 
@@ -41,4 +46,7 @@ public interface ReactiveEventStoreEngine {
 
     Mono<TrackingToken> createTokenAt(Instant dateTime);
 
+    Mono<Void> createSchema();
+
+    Mono<Void> executeSql(String query);
 }

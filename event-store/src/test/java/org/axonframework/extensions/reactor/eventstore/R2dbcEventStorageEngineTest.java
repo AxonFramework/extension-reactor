@@ -20,12 +20,13 @@ import io.r2dbc.postgresql.PostgresqlConnectionConfiguration;
 import io.r2dbc.postgresql.PostgresqlConnectionFactory;
 import io.r2dbc.spi.ConnectionFactory;
 import org.axonframework.common.jdbc.PersistenceExceptionResolver;
-import org.axonframework.eventhandling.DomainEventData;
-import org.axonframework.eventhandling.DomainEventMessage;
+import org.axonframework.eventhandling.*;
+import org.axonframework.eventsourcing.eventstore.EmbeddedEventStore;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventTableFactory;
 import org.axonframework.eventsourcing.eventstore.jdbc.HsqlEventTableFactory;
 import org.axonframework.extensions.reactor.eventstore.impl.BlockingR2dbcEventStoreEngine;
+import org.axonframework.serialization.UnknownSerializedType;
 import org.axonframework.serialization.upcasting.event.EventUpcaster;
 import org.axonframework.serialization.upcasting.event.NoOpEventUpcaster;
 import org.axonframework.serialization.xml.XStreamSerializer;
@@ -33,26 +34,32 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.sql.SQLException;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
+import java.util.stream.LongStream;
+import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
-import static org.axonframework.extensions.reactor.eventstore.utils.EventStoreTestUtils.AGGREGATE;
-import static org.axonframework.extensions.reactor.eventstore.utils.EventStoreTestUtils.createEvent;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.axonframework.extensions.reactor.eventstore.utils.EventStoreTestUtils.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * @author Rene de Waele
  */
 public class R2dbcEventStorageEngineTest {
 
+
     private PersistenceExceptionResolver defaultPersistenceExceptionResolver;
     private BlockingR2dbcEventStoreEngine testSubject;
 
     @BeforeEach
-    public void setUp() throws SQLException {
+    public void setUp() {
         testSubject = createEngine(NoOpEventUpcaster.INSTANCE, defaultPersistenceExceptionResolver,
                 new EventSchema(), byte[].class, HsqlEventTableFactory.INSTANCE);
     }
@@ -72,7 +79,7 @@ public class R2dbcEventStorageEngineTest {
     }
 
 
-    /*@Test
+    @Test
     public void testGapsForVeryOldEventsAreNotIncluded() throws SQLException {
         GenericEventMessage.clock =
                 Clock.fixed(Clock.systemUTC().instant().minus(1, ChronoUnit.HOURS), Clock.systemUTC().getZone());
@@ -89,20 +96,19 @@ public class R2dbcEventStorageEngineTest {
         GenericEventMessage.clock = Clock.fixed(Clock.systemUTC().instant(), Clock.systemUTC().getZone());
         testSubject.appendEvents(createEvent(-4), createEvent(3));
 
-        try (Connection conn = dataSource.getConnection()) {
-            conn.prepareStatement("DELETE FROM DomainEventEntry WHERE sequenceNumber < 0").executeUpdate();
-        }
+
+        testSubject.executeSql("DELETE FROM DomainEventEntry WHERE sequenceNumber < 0");
 
         testSubject.fetchTrackedEvents((TrackingToken) null, 100).stream()
                 .map(i -> (GapAwareTrackingToken) i.trackingToken())
                 .forEach(i -> assertTrue(i.getGaps().size() <= 2));
     }
 
-    @DirtiesContext
+    //@DirtiesContext
     @Test
     public void testOldGapsAreRemovedFromProvidedTrackingToken() throws SQLException {
-        testSubject.setGapTimeout(50001);
-        testSubject.setGapCleaningThreshold(50);
+        //testSubject.setGapTimeout(50001);
+        //testSubject.setGapCleaningThreshold(50);
         Instant now = Clock.systemUTC().instant();
         GenericEventMessage.clock = Clock.fixed(now.minus(1, ChronoUnit.HOURS), Clock.systemUTC().getZone());
         testSubject.appendEvents(createEvent(-1), createEvent(0)); // index 0 and 1
@@ -113,9 +119,7 @@ public class R2dbcEventStorageEngineTest {
         GenericEventMessage.clock = Clock.fixed(now, Clock.systemUTC().getZone());
         testSubject.appendEvents(createEvent(-4), createEvent(3)); // index 6 and 7
 
-        try (Connection conn = dataSource.getConnection()) {
-            conn.prepareStatement("DELETE FROM DomainEventEntry WHERE sequenceNumber < 0").executeUpdate();
-        }
+        testSubject.executeSql("DELETE FROM DomainEventEntry WHERE sequenceNumber < 0");
 
         List<Long> gaps = LongStream.range(-50, 6)
                 .filter(i -> i != 1L && i != 3L && i != 5)
@@ -125,9 +129,9 @@ public class R2dbcEventStorageEngineTest {
                 testSubject.fetchTrackedEvents(GapAwareTrackingToken.newInstance(6, gaps), 100);
         assertEquals(1, events.size());
         assertEquals(4L, (long) ((GapAwareTrackingToken) events.get(0).trackingToken()).getGaps().first());
-    }*/
+    }
 
-   /* @Test
+    @Test
     public void testEventsWithUnknownPayloadTypeDoNotResultInError() throws SQLException, InterruptedException {
         String expectedPayloadOne = "Payload3";
         String expectedPayloadTwo = "Payload4";
@@ -139,10 +143,9 @@ public class R2dbcEventStorageEngineTest {
         testSubject.appendEvents(createEvent(AGGREGATE, 1, "Payload1"),
                 createEvent(AGGREGATE, 2, "Payload2"));
         // Update events which will be part of the first batch to an unknown payload type
-        try (Connection conn = dataSource.getConnection()) {
-            conn.prepareStatement("UPDATE DomainEventEntry e SET e.payloadType = 'unknown'")
-                    .executeUpdate();
-        }
+
+        testSubject.executeSql("UPDATE DomainEventEntry SET payloadType = 'unknown'");
+
         testSubject.appendEvents(createEvent(AGGREGATE, 3, expectedPayloadOne),
                 createEvent(AGGREGATE, 4, expectedPayloadTwo));
 
@@ -158,17 +161,15 @@ public class R2dbcEventStorageEngineTest {
         assertEquals(UnknownSerializedType.class, eventStoreResult.nextAvailable().getPayloadType());
         assertEquals(expectedPayloadOne, eventStoreResult.nextAvailable().getPayload());
         assertEquals(expectedPayloadTwo, eventStoreResult.nextAvailable().getPayload());
-    }*/
+    }
 
-    /*@Test
+    @Test
     public void testStreamCrossesConsecutiveGapsOfMoreThanBatchSuccessfully() throws SQLException {
         testSubject = createEngine(defaultPersistenceExceptionResolver, new EventSchema(), 10);
         testSubject.appendEvents(createEvents(100));
 
-        try (Connection conn = dataSource.getConnection()) {
-            conn.prepareStatement("DELETE FROM DomainEventEntry WHERE globalIndex >= 20 and globalIndex < 40")
-                    .executeUpdate();
-        }
+        testSubject.executeSql("DELETE FROM DomainEventEntry WHERE globalIndex >= 20 and globalIndex < 40");
+
 
         Stream<? extends TrackedEventMessage<?>> actual = testSubject.readEvents(null, false);
         List<? extends TrackedEventMessage<?>> actualEvents = actual.collect(toList());
@@ -177,30 +178,20 @@ public class R2dbcEventStorageEngineTest {
 
     @Test
     public void testStreamDoesNotCrossExtendedGapWhenDisabled() throws SQLException {
-        testSubject = JdbcEventStorageEngine.builder().upcasterChain(NoOpEventUpcaster.INSTANCE)
+        testSubject = BlockingR2dbcEventStoreEngine.builder().upcasterChain(NoOpEventUpcaster.INSTANCE)
                 .batchSize(10)
-                .connectionProvider(dataSource::getConnection)
-                .transactionManager(NoTransactionManager.INSTANCE)
                 .schema(new EventSchema())
                 .dataType(byte[].class)
+                .connectionFactory(getConnectionFactory())
                 .extendedGapCheckEnabled(false)
                 .build();
 
-        try {
-            Connection connection = dataSource.getConnection();
-            connection.prepareStatement("DROP TABLE IF EXISTS DomainEventEntry").executeUpdate();
-            connection.prepareStatement("DROP TABLE IF EXISTS SnapshotEventEntry").executeUpdate();
-            testSubject.createSchema(HsqlEventTableFactory.INSTANCE);
-        } catch (SQLException e) {
-            throw new IllegalStateException(e);
-        }
 
         testSubject.appendEvents(createEvents(100));
 
-        try (Connection conn = dataSource.getConnection()) {
-            conn.prepareStatement("DELETE FROM DomainEventEntry WHERE globalIndex >= 20 and globalIndex < 40")
-                    .executeUpdate();
-        }
+
+        testSubject.executeSql("DELETE FROM DomainEventEntry WHERE globalIndex > 20 and globalIndex < 40");
+
 
         Stream<? extends TrackedEventMessage<?>> actual = testSubject.readEvents(null, false);
         List<? extends TrackedEventMessage<?>> actualEvents = actual.collect(toList());
@@ -209,25 +200,26 @@ public class R2dbcEventStorageEngineTest {
 
     @Test
     public void testStreamCrossesInitialConsecutiveGapsOfMoreThanBatchSuccessfully() throws SQLException {
-        testSubject = createEngine(defaultPersistenceExceptionResolver, new EventSchema(), 10);
+
+        testSubject = createEngine(defaultPersistenceExceptionResolver, getEventSchema(), 10);
         testSubject.appendEvents(createEvents(100));
 
-        try (Connection conn = dataSource.getConnection()) {
-            conn.prepareStatement("DELETE FROM DomainEventEntry WHERE globalIndex < 20")
-                    .executeUpdate();
-        }
+        testSubject.executeSql("DELETE FROM DomainEventEntry WHERE globalIndex <= 20");
 
         Stream<? extends TrackedEventMessage<?>> actual = testSubject.readEvents(null, false);
         List<? extends TrackedEventMessage<?>> actualEvents = actual.collect(toList());
         assertEquals(80, actualEvents.size());
     }
 
+    private EventSchema getEventSchema() {
+        return EventSchema.builder().globalIndexColumn("globalindex").build();
+    }
+
     @Test
     public void testLoadSnapshotIfMatchesPredicate() {
         Predicate<DomainEventData<?>> acceptAll = i -> true;
 
-        setTestSubject(testSubject = createEngine(acceptAll));
-
+        testSubject = createEngine(acceptAll);
         testSubject.storeSnapshot(createEvent(1));
         assertTrue(testSubject.readSnapshot(AGGREGATE).isPresent());
     }
@@ -236,11 +228,11 @@ public class R2dbcEventStorageEngineTest {
     public void testDoNotLoadSnapshotIfNotMatchingPredicate() {
         Predicate<DomainEventData<?>> rejectAll = i -> false;
 
-        setTestSubject(testSubject = createEngine(rejectAll));
+        testSubject = createEngine(rejectAll);
 
         testSubject.storeSnapshot(createEvent(1));
         assertFalse(testSubject.readSnapshot(AGGREGATE).isPresent());
-    }*/
+    }
 
     @Test
     public void testReadEventsForAggregateReturnsTheCompleteStream() {
@@ -399,21 +391,25 @@ public class R2dbcEventStorageEngineTest {
                                                        EventTableFactory tableFactory,
                                                        int batchSize) {
 
-        final ConnectionFactory postgresqlConnectionFactory =
-                new PostgresqlConnectionFactory(PostgresqlConnectionConfiguration.builder()
-                        .host("localhost")
-                        .database("enrollment")
-                        .username("root")
-                        .password("root").build());
+        final ConnectionFactory postgresqlConnectionFactory = getConnectionFactory();
         BlockingR2dbcEventStoreEngine result = BlockingR2dbcEventStoreEngine.builder()
                 .connectionFactory(postgresqlConnectionFactory)
                 .serializer(XStreamSerializer.defaultSerializer())
+                .batchSize(batchSize)
+                .snapshotFilter(snapshotFilter)
                 .build();
+        result.executeSql("DROP TABLE IF EXISTS DomainEventEntry");
+        result.executeSql("DROP TABLE IF EXISTS SnapshotEventEntry");
+        result.createSchema();
 
-        //Connection connection = dataSource.getConnection();
-        //connection.prepareStatement("DROP TABLE IF EXISTS DomainEventEntry").executeUpdate();
-        //connection.prepareStatement("DROP TABLE IF EXISTS SnapshotEventEntry").executeUpdate();
-        //result.createSchema(tableFactory);
         return result;
+    }
+
+    private ConnectionFactory getConnectionFactory() {
+        return new PostgresqlConnectionFactory(PostgresqlConnectionConfiguration.builder()
+                .host("localhost")
+                .database("enrollment")
+                .username("root")
+                .password("root").build());
     }
 }
