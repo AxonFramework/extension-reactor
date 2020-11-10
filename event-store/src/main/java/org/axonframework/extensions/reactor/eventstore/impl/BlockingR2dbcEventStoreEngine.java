@@ -4,7 +4,7 @@ import io.r2dbc.spi.ConnectionFactory;
 import org.axonframework.eventhandling.*;
 import org.axonframework.eventsourcing.eventstore.BatchingEventStorageEngine;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
-import org.axonframework.extensions.reactor.eventstore.ReactiveEventStoreEngine;
+import org.axonframework.extensions.reactor.eventstore.BlockingReactiveEventStoreEngineSupport;
 import org.axonframework.serialization.Serializer;
 import org.axonframework.serialization.upcasting.event.EventUpcaster;
 import org.axonframework.serialization.xml.XStreamSerializer;
@@ -23,7 +23,7 @@ import static org.axonframework.common.BuilderUtils.assertNonNull;
  */
 public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
 
-    private final ReactiveEventStoreEngine reactiveEventStoreEngine;
+    private final BlockingReactiveEventStoreEngineSupport reactiveEventStoreEngine;
 
     public static Builder builder() {
         return new BlockingR2dbcEventStoreEngine.Builder();
@@ -92,6 +92,11 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
         return this.reactiveEventStoreEngine.readEvents(aggregateIdentifier, firstSequenceNumber, batchSize).toStream().collect(Collectors.toList());
     }
 
+    @Override
+    protected boolean fetchForAggregateUntilEmpty() {
+        return true;
+    }
+
 
     public static class Builder extends BatchingEventStorageEngine.Builder {
         private Class<?> dataType = byte[].class;
@@ -101,7 +106,8 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
         private Serializer serializer = XStreamSerializer.defaultSerializer();
         private int batchSize;
         private EventUpcaster upcasterChain;
-        private boolean extendedGapCheckEnabled;
+        private boolean extendedGapCheckEnabled = true;
+
 
         public Builder connectionFactory(ConnectionFactory connectionFactory) {
             assertNonNull(connectionFactory, "connectionFactory may not be null");

@@ -8,19 +8,23 @@ import org.axonframework.common.jdbc.PersistenceExceptionResolver;
 import org.axonframework.eventhandling.*;
 import org.axonframework.eventsourcing.eventstore.EventStoreException;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
-import org.axonframework.eventsourcing.eventstore.jdbc.JdbcSQLErrorCodesResolver;
 import org.axonframework.eventsourcing.snapshotting.SnapshotFilter;
+import org.axonframework.extensions.reactor.eventstore.BlockingReactiveEventStoreEngineSupport;
+import org.axonframework.extensions.reactor.eventstore.R2dbSqlErrorCodeResolver;
 import org.axonframework.extensions.reactor.eventstore.ReactiveEventStoreEngine;
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventEntryMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.TrackedEventDataMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.TrackedEventMessageMapper;
 import org.axonframework.extensions.reactor.eventstore.statements.*;
+import org.axonframework.modelling.command.AggregateStreamCreationException;
+import org.axonframework.modelling.command.ConcurrencyException;
 import org.axonframework.serialization.Serializer;
 import org.axonframework.serialization.upcasting.event.EventUpcaster;
 import org.axonframework.serialization.upcasting.event.EventUpcasterChain;
 import org.axonframework.serialization.upcasting.event.NoOpEventUpcaster;
 import org.axonframework.serialization.xml.XStreamSerializer;
+import org.reactivestreams.Publisher;
 import org.springframework.r2dbc.connection.R2dbcTransactionManager;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.transaction.ReactiveTransactionManager;
@@ -44,7 +48,7 @@ import static org.axonframework.common.BuilderUtils.assertThat;
  */
 
 
-public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
+public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, BlockingReactiveEventStoreEngineSupport {
 
     private static final int DEFAULT_MAX_GAP_OFFSET = 10000;
     private static final long DEFAULT_LOWEST_GLOBAL_SEQUENCE = 1;
@@ -64,6 +68,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
     private final TrackedEventMessageMapper trackedEventMessageMapper;
     private final EventUpcasterChain upcasterChain;
     private final TransactionalOperator transactionalOperator;
+    private final PersistenceExceptionResolver persistenceExceptionResolver;
 
     private final TrackedEventsReader trackedEventsReader;
     private final DomainEventMapper domainEventMapper;
@@ -92,15 +97,10 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
         ReactiveTransactionManager tm = new R2dbcTransactionManager(connectionFactory);
         this.transactionalOperator = TransactionalOperator.create(tm);
         this.domainEventMapper = new DomainEventMapper(serializer, upcasterChain);
+        this.persistenceExceptionResolver = builder.persistenceExceptionResolver;
         this.trackedEventsReader = new TrackedEventsReader(
-                connectionFactory,
-                eventSchema,
-                dataType,
-                serializer,
-                domainEventEntryMapper,
                 databaseClient,
                 trackedEventDataMapper,
-                trackedEventMessageMapper,
                 transactionalOperator
                 , builder
         );
@@ -127,8 +127,55 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
                     final Statement statement = this.appendSnapshotStatementBuilder.build(connection,
                             this.eventSchema, dataType, snapshot, serializer, null);
                     return Flux.from(statement.execute()).flatMap(result -> result.map((row, rowMetadata) -> ""));
-                })).as(this.transactionalOperator::transactional).then();
+                }))
+                .onErrorResume((error -> this.handlePersistenceError(error, snapshot)))
+                .onErrorResume(error -> {
+                    if (error instanceof ConcurrencyException) {
+                        return Mono.empty();
+                    } else {
+                        return Mono.error(error);
+                    }
+                })
+                .as(this.transactionalOperator::transactional).then();
     }
+
+    private Publisher<? extends String> handlePersistenceError(Throwable error, EventMessage<?> failedEvent) {
+        String eventDescription = buildExceptionMessage(failedEvent);
+        if (error instanceof Exception && persistenceExceptionResolver != null && persistenceExceptionResolver.isDuplicateKeyViolation((Exception) error)) {
+            if (isFirstDomainEvent(failedEvent)) {
+                throw new AggregateStreamCreationException(eventDescription, error);
+            }
+            return Mono.error(new ConcurrencyException(eventDescription, error));
+        } else {
+            return Mono.error(new EventStoreException(eventDescription, error));
+        }
+    }
+
+    private String buildExceptionMessage(EventMessage failedEvent) {
+        String eventDescription = format("An event with identifier [%s] could not be persisted",
+                failedEvent.getIdentifier());
+        if (isFirstDomainEvent(failedEvent)) {
+            DomainEventMessage failedDomainEvent = (DomainEventMessage) failedEvent;
+            eventDescription = format(
+                    "Cannot reuse aggregate identifier [%s] to create aggregate [%s] since identifiers need to be unique.",
+                    failedDomainEvent.getAggregateIdentifier(),
+                    failedDomainEvent.getType());
+        } else if (failedEvent instanceof DomainEventMessage<?>) {
+            DomainEventMessage failedDomainEvent = (DomainEventMessage) failedEvent;
+            eventDescription = format("An event for aggregate [%s] at sequence [%d] was already inserted",
+                    failedDomainEvent.getAggregateIdentifier(),
+                    failedDomainEvent.getSequenceNumber());
+        }
+        return eventDescription;
+    }
+
+    private boolean isFirstDomainEvent(EventMessage failedEvent) {
+        if (failedEvent instanceof DomainEventMessage<?>) {
+            return ((DomainEventMessage) failedEvent).getSequenceNumber() == 0L;
+        }
+        return false;
+    }
+
 
     @Override
     public Flux<? extends TrackedEventMessage<?>> readEvents(TrackingToken trackingToken) {
@@ -141,6 +188,8 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
     public Flux<? extends TrackedEventData<?>> readEvents(TrackingToken lastToken, int batchSize) {
         return trackedEventsReader.readEvents(lastToken, batchSize);
     }
+
+
 
 
     @Override
@@ -167,6 +216,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
                             serializer, null);
                     return Flux.from(statement.execute()).flatMap(result -> result.map((row, rowMetadata) -> ""));
                 }))
+                .onErrorResume((error -> this.handlePersistenceError(error, events.get(0))))
                 .as(this.transactionalOperator::transactional).then();
     }
 
@@ -191,7 +241,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
                             .from(tokenAt.execute())
                             .flatMap((r) -> r.map(this.domainEventEntryMapper::map));
                 })
-                .onErrorResume((error) -> Mono.error(new EventStoreException("Failed to get events token", error)))
+                .onErrorResume((error) -> Mono.error(new EventStoreException("Failed to get events", error)))
                 .as(this.transactionalOperator::transactional);
 
     }
@@ -420,7 +470,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine {
         }
 
         private Builder() {
-            persistenceExceptionResolver(new JdbcSQLErrorCodesResolver());
+            persistenceExceptionResolver(new R2dbSqlErrorCodeResolver());
         }
 
 

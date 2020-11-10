@@ -20,11 +20,12 @@ import io.r2dbc.spi.Connection;
 import io.r2dbc.spi.Statement;
 import org.axonframework.eventhandling.DomainEventMessage;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
+import org.axonframework.extensions.reactor.eventstore.impl.R2dbcEventStoreEngine;
 import org.axonframework.serialization.Serializer;
 
 
 /**
- * Contract which defines how to build a PreparedStatement for use on {@link org.axonframework.extensions.reactor.eventstore.impl.R2dbcEventStoreEngine#storeSnapshot(DomainEventMessage,
+ * Contract which defines how to build a PreparedStatement for use on {@link R2dbcEventStoreEngine#storeSnapshot(DomainEventMessage,
  * Serializer)}.
  *
  * @author Lucas Campos

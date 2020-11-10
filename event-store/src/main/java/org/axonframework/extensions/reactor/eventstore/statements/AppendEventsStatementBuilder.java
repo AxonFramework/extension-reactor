@@ -27,7 +27,7 @@ import org.axonframework.serialization.Serializer;
 import java.util.List;
 
 /**
- * Contract which defines how to build a PreparedStatement for use on {@link org.axonframework.extensions.reactor.eventstore.impl.R2dbcEventStoreEngine#appendEvents(List,
+ * Contract which defines how to build a PreparedStatement for use on {@link R2dbcEventStoreEngine#appendEvents(List,
  * Serializer)}
  *
  * @author Lucas Campos

@@ -7,11 +7,13 @@ import org.axonframework.eventhandling.EventMessage;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
 import org.axonframework.serialization.SerializedObject;
 import org.axonframework.serialization.Serializer;
+import org.springframework.util.StringUtils;
 
 import java.time.Instant;
-import java.util.Collections;
 import java.util.List;
 import java.util.SortedSet;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.axonframework.common.DateTimeUtils.formatInstant;
 import static org.axonframework.eventhandling.EventUtils.asDomainEventMessage;
@@ -35,9 +37,13 @@ public class R2dbcStatementBuilders {
             statement.bind("$2", event.getAggregateIdentifier());
             statement.bind("$3", event.getSequenceNumber());
             statement.bind("$4", event.getType());
-            statement.bind("$5", event.getTimestamp());
+            statement.bind("$5", formatInstant(event.getTimestamp()));
             statement.bind("$6", payload.getType().getName());
-            statement.bind("$7", "");
+            if (StringUtils.hasText(payload.getType().getRevision())) {
+                statement.bind("$7", payload.getType().getRevision());
+            } else {
+                statement.bindNull("$7", String.class);
+            }
             statement.bind("$8", payload.getData());
             statement.bind("$9", metaData.getData());
             statement.add();
@@ -85,17 +91,17 @@ public class R2dbcStatementBuilders {
 
     public static Statement readEventDataWithGaps(Connection connection, EventSchema schema, long globalIndex,
                                                   int batchSize, List<Long> gaps) {
-        final Integer gapSize = gaps.size();
+        final int gapSize = gaps.size();
         final String sql =
                 "SELECT " + schema.trackedEventFields() + " FROM " + schema.domainEventTable() + " WHERE ("
                         + schema.globalIndexColumn() + " > $1 AND " + schema.globalIndexColumn() + " <= $2) OR "
-                        + schema.globalIndexColumn() + " IN (" + String.join(",", Collections.nCopies(gapSize, "?"))
+                        + schema.globalIndexColumn() + " IN (" + IntStream.range(3, gapSize + 3).boxed().map(index -> String.format("$%d", index)).collect(Collectors.joining(","))
                         + ") ORDER BY " + schema.globalIndexColumn() + " ASC";
         Statement statement = connection.createStatement(sql);
         statement.bind("$1", globalIndex);
         statement.bind("$2", globalIndex + batchSize);
         for (int i = 0; i < gapSize; i++) {
-            statement.bind(i + 3, gaps.get(i));
+            statement.bind("$" + (i + 3), gaps.get(i));
         }
         return statement;
     }
@@ -227,10 +233,13 @@ public class R2dbcStatementBuilders {
         statement.bind("$2", snapshot.getAggregateIdentifier());
         statement.bind("$3", snapshot.getSequenceNumber());
         statement.bind("$4", snapshot.getType());
-        statement.bind("$5", snapshot.getTimestamp());
-        //timestampWriter.writeTimestamp(statement, 5, snapshot.getTimestamp());
+        statement.bind("$5", formatInstant(snapshot.getTimestamp()));
         statement.bind("$6", payload.getType().getName());
-        statement.bind("$7", "");
+        if (StringUtils.hasText(payload.getType().getRevision())) {
+            statement.bind("$7", payload.getType().getRevision());
+        } else {
+            statement.bindNull("$7", String.class);
+        }
         statement.bind("$8", payload.getData());
         statement.bind("$9", metaData.getData());
         return statement;

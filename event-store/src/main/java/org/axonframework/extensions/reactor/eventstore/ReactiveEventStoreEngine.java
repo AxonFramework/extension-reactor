@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
+import static java.util.Arrays.asList;
+
 /**
  * @author vtiwar27
  * @date 2020-09-28
@@ -15,28 +17,29 @@ import java.util.Optional;
 public interface ReactiveEventStoreEngine {
 
 
-    Mono<Void> storeSnapshot(DomainEventMessage<?> snapshot);
-
-
-    Flux<? extends TrackedEventMessage<?>> readEvents(TrackingToken trackingToken);
-
     Mono<Void> appendEvents(List<? extends EventMessage<?>> events);
+
+    default Mono<Void> appendEvents(EventMessage<?>... events) {
+        return appendEvents(asList(events));
+    }
 
     default Flux<DomainEventMessage<?>> readEvents(String aggregateIdentifier) {
         return readEvents(aggregateIdentifier, 0);
     }
 
+    Mono<Void> storeSnapshot(DomainEventMessage<?> snapshot);
+
+
+    Flux<? extends TrackedEventMessage<?>> readEvents(TrackingToken trackingToken);
+
+
     Flux<DomainEventMessage<?>> readEvents(String aggregateIdentifier, long firstSequenceNumber);
 
-    Flux<? extends TrackedEventData<?>> readEvents(TrackingToken trackingToken, int batchSize);
 
     Flux<DomainEventMessage<?>> readSnapshot(String aggregateIdentifier);
 
     Flux<DomainEventData<?>> readSnapshotData(String aggregateIdentifier);
 
-
-    Flux<? extends DomainEventData<?>> readEvents(String aggregateIdentifier, long firstSequenceNumber,
-                                                  int batchSize);
 
     Mono<Optional<Long>> lastSequenceNumberFor(String aggregateIdentifier);
 
@@ -46,7 +49,5 @@ public interface ReactiveEventStoreEngine {
 
     Mono<TrackingToken> createTokenAt(Instant dateTime);
 
-    Mono<Void> createSchema();
 
-    Mono<Void> executeSql(String query);
 }

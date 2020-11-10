@@ -1,22 +1,17 @@
 package org.axonframework.extensions.reactor.eventstore.impl;
 
 import io.r2dbc.spi.Connection;
-import io.r2dbc.spi.ConnectionFactory;
 import io.r2dbc.spi.Statement;
 import org.axonframework.common.DateTimeUtils;
 import org.axonframework.eventhandling.*;
 import org.axonframework.eventsourcing.eventstore.EventStoreException;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
-import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventEntryMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.TrackedEventDataMapper;
-import org.axonframework.extensions.reactor.eventstore.mappers.TrackedEventMessageMapper;
 import org.axonframework.extensions.reactor.eventstore.statements.CleanGapsStatementBuilder;
 import org.axonframework.extensions.reactor.eventstore.statements.FetchTrackedEventsStatementBuilder;
 import org.axonframework.extensions.reactor.eventstore.statements.ReadEventDataWithGapsStatementBuilder;
 import org.axonframework.extensions.reactor.eventstore.statements.ReadEventDataWithoutGapsStatementBuilder;
 import org.axonframework.extensions.reactor.eventstore.utils.Tuple2;
-import org.axonframework.serialization.Serializer;
-import org.axonframework.serialization.upcasting.event.EventUpcaster;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
@@ -34,20 +29,14 @@ import java.util.stream.LongStream;
  */
 public class TrackedEventsReader {
 
-    private final ConnectionFactory connectionFactory;
     private final EventSchema eventSchema;
-    private final Class<?> dataType;
-    private final Serializer serializer;
-    private final DomainEventEntryMapper domainEventEntryMapper;
     private final DatabaseClient databaseClient;
-    private final int batchSize;
+
     private int gapTimeout;
     private int gapCleaningThreshold;
     private final int maxGapOffset;
     private final long lowestGlobalSequence;
     private final TrackedEventDataMapper trackedEventDataMapper;
-    private final TrackedEventMessageMapper trackedEventMessageMapper;
-    private final EventUpcaster upcasterChain;
     private final TransactionalOperator transactionalOperator;
     private final boolean extendedGapCheckEnabled;
     private final ReadEventDataWithGapsStatementBuilder readEventDataWithGapsStatementBuilder;
@@ -56,27 +45,16 @@ public class TrackedEventsReader {
     private final FetchTrackedEventsStatementBuilder fetchTrackedEventsStatementBuilder;
 
 
-    public TrackedEventsReader(ConnectionFactory connectionFactory,
-                               EventSchema eventSchema,
-                               Class<?> dataType, Serializer serializer,
-                               DomainEventEntryMapper domainEventEntryMapper,
-                               DatabaseClient databaseClient,
-                               TrackedEventDataMapper trackedEventDataMapper,
-                               TrackedEventMessageMapper trackedEventMessageMapper,
-                               TransactionalOperator transactionalOperator,
-                               R2dbcEventStoreEngine.Builder builder) {
-        this.connectionFactory = connectionFactory;
-        this.eventSchema = eventSchema;
-        this.dataType = dataType;
-        this.serializer = serializer;
-        this.domainEventEntryMapper = domainEventEntryMapper;
+    TrackedEventsReader(
+            DatabaseClient databaseClient,
+            TrackedEventDataMapper trackedEventDataMapper,
+            TransactionalOperator transactionalOperator,
+            R2dbcEventStoreEngine.Builder builder) {
+        this.eventSchema = builder.schema;
         this.databaseClient = databaseClient;
-        this.batchSize = builder.batchSize;
         this.gapTimeout = builder.gapTimeout;
         this.gapCleaningThreshold = builder.gapCleaningThreshold;
         this.trackedEventDataMapper = trackedEventDataMapper;
-        this.trackedEventMessageMapper = trackedEventMessageMapper;
-        this.upcasterChain = builder.upcasterChain;
         this.transactionalOperator = transactionalOperator;
         this.cleanGapsStatementBuilder = builder.cleanGapsStatementBuilder;
         this.fetchTrackedEventsStatementBuilder = builder.fetchTrackedEventsStatementBuilder;
@@ -91,12 +69,6 @@ public class TrackedEventsReader {
     public Flux<? extends TrackedEventData<?>> readEvents(TrackingToken lastToken, int batchSize) {
 
         return Mono.just(Optional.ofNullable(lastToken))
-                .flatMap((token) -> {
-                    //if (token.isPresent() || lastToken instanceof GapAwareTrackingToken) {
-                    //    return Mono.error(new IllegalArgumentException("Unsupported token format: " + lastToken));
-                    //}
-                    return Mono.just(token);
-                })
                 .flatMap(token -> {
                     if (token.isPresent() && ((GapAwareTrackingToken) token.get()).getGaps().size() > gapCleaningThreshold) {
                         return cleanGaps(token.get());
@@ -154,10 +126,13 @@ public class TrackedEventsReader {
 
 
     private Mono<Optional<Long>> getTrackedEvents(long index) {
-        return databaseClient.inConnectionMany(connection -> {
-            Statement statement = fetchTrackedEventsStatementBuilder.build(connection, eventSchema, index);
-            return Flux.from(statement.execute()).flatMap(r -> r.map((row, rowMetadata) -> Optional.ofNullable(row.get(0, Long.class))));
-        }).next();
+        return databaseClient
+                .inConnectionMany(connection -> {
+                    Statement statement = fetchTrackedEventsStatementBuilder.build(connection, eventSchema, index);
+                    return Flux
+                            .from(statement.execute())
+                            .flatMap(r -> r.map((row, rowMetadata) -> Optional.ofNullable(row.get(0, Long.class))));
+                }).next();
     }
 
     private Mono<Optional<GapAwareTrackingToken>> cleanGaps(TrackingToken lastToken) {
@@ -190,11 +165,11 @@ public class TrackedEventsReader {
     private List<TrackedEventData<?>> getTrackedEventData(GapAwareTrackingToken lastToken,
                                                           List<Tuple2<Long, DomainEventData<?>>> results) {
         List<TrackedEventData<?>> trackedEventDataList = new ArrayList<>();
+        GapAwareTrackingToken token = lastToken;
         for (Tuple2<Long, DomainEventData<?>> result : results) {
             long globalSequence = result.getT1();
             final DomainEventData<?> domainEvent = result.getT2();
-            boolean allowGaps = false;// domainEvent.getTimestamp().isAfter(gapTimeoutFrame());
-            GapAwareTrackingToken token = lastToken;
+            boolean allowGaps = domainEvent.getTimestamp().isAfter(gapTimeoutFrame());
             if (token == null) {
                 token = GapAwareTrackingToken.newInstance(
                         globalSequence,
