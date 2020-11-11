@@ -23,7 +23,6 @@ import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
 import org.axonframework.extensions.reactor.eventstore.impl.R2dbcEventStoreEngine;
 import org.axonframework.serialization.Serializer;
 
-
 import java.util.List;
 
 /**
@@ -51,6 +50,5 @@ public interface AppendEventsStatementBuilder {
                     EventSchema schema,
                     Class<?> dataType,
                     List<? extends EventMessage<?>> events,
-                    Serializer serializer,
-                    TimestampWriter timestampWriter);
+                    Serializer serializer);
 }

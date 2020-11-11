@@ -25,7 +25,7 @@ import static org.axonframework.eventhandling.EventUtils.asDomainEventMessage;
 public class R2dbcStatementBuilders {
 
     public static Statement getAppendEventStatement(Connection connection, EventSchema eventSchema, Class<?> dataType, List<? extends EventMessage<?>> events,
-                                                    Serializer serializer, TimestampWriter timestampWriter) {
+                                                    Serializer serializer) {
         final Statement statement = connection.createStatement("INSERT INTO " +
                 eventSchema.domainEventTable() + " (" + eventSchema.domainEventFields()
                 + ") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)");
@@ -177,53 +177,11 @@ public class R2dbcStatementBuilders {
     }
 
 
-    public static Statement createDomainEventTable(Connection connection,
-                                                   EventSchema schema) {
-        String sql = "CREATE TABLE IF NOT EXISTS " + schema.domainEventTable() + " (\n" +
-                schema.globalIndexColumn() + " " + idColumnType() + " NOT NULL,\n" +
-                schema.aggregateIdentifierColumn() + " VARCHAR(255) NOT NULL,\n" +
-                schema.sequenceNumberColumn() + " BIGINT NOT NULL,\n" +
-                schema.typeColumn() + " VARCHAR(255),\n" +
-                schema.eventIdentifierColumn() + " VARCHAR(255) NOT NULL,\n" +
-                schema.metaDataColumn() + " " + payloadType() + ",\n" +
-                schema.payloadColumn() + " " + payloadType() + " NOT NULL,\n" +
-                schema.payloadRevisionColumn() + " VARCHAR(255),\n" +
-                schema.payloadTypeColumn() + " VARCHAR(255) NOT NULL,\n" +
-                schema.timestampColumn() + " VARCHAR(255) NOT NULL,\n" +
-                "PRIMARY KEY (" + schema.globalIndexColumn() + "),\n" +
-                "UNIQUE (" + schema.aggregateIdentifierColumn() + ", " +
-                schema.sequenceNumberColumn() + "),\n" +
-                "UNIQUE (" + schema.eventIdentifierColumn() + ")\n" +
-                ")";
-        return connection.createStatement(sql);
-    }
-
-
-    public static Statement createSnapshotEventTable(Connection connection,
-                                                     EventSchema schema) {
-        String sql = "CREATE TABLE IF NOT EXISTS " + schema.snapshotTable() + " (\n" +
-                schema.aggregateIdentifierColumn() + " VARCHAR(255) NOT NULL,\n" +
-                schema.sequenceNumberColumn() + " BIGINT NOT NULL,\n" +
-                schema.typeColumn() + " VARCHAR(255) NOT NULL,\n" +
-                schema.eventIdentifierColumn() + " VARCHAR(255) NOT NULL,\n" +
-                schema.metaDataColumn() + " " + payloadType() + ",\n" +
-                schema.payloadColumn() + " " + payloadType() + " NOT NULL,\n" +
-                schema.payloadRevisionColumn() + " VARCHAR(255),\n" +
-                schema.payloadTypeColumn() + " VARCHAR(255) NOT NULL,\n" +
-                schema.timestampColumn() + " VARCHAR(255) NOT NULL,\n" +
-                "PRIMARY KEY (" + schema.aggregateIdentifierColumn() + ", " +
-                schema.sequenceNumberColumn() + "),\n" +
-                "UNIQUE (" + schema.eventIdentifierColumn() + ")\n" +
-                ")";
-        return connection.createStatement(sql);
-    }
-
     public static Statement appendSnapshot(Connection connection,
                                            EventSchema schema,
                                            Class<?> dataType,
                                            DomainEventMessage<?> snapshot,
-                                           Serializer serializer,
-                                           TimestampWriter timestampWriter) {
+                                           Serializer serializer) {
         final String sql = "INSERT INTO "
                 + schema.snapshotTable() + " (" + schema.domainEventFields() + ") VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)";
         Statement statement = connection.createStatement(sql);
@@ -246,12 +204,4 @@ public class R2dbcStatementBuilders {
     }
 
 
-    private static String idColumnType() {
-        return "BIGSERIAL";
-    }
-
-
-    private static String payloadType() {
-        return "bytea";
-    }
 }

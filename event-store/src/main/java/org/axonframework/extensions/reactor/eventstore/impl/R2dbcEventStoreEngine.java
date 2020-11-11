@@ -12,6 +12,8 @@ import org.axonframework.eventsourcing.snapshotting.SnapshotFilter;
 import org.axonframework.extensions.reactor.eventstore.BlockingReactiveEventStoreEngineSupport;
 import org.axonframework.extensions.reactor.eventstore.R2dbSqlErrorCodeResolver;
 import org.axonframework.extensions.reactor.eventstore.ReactiveEventStoreEngine;
+import org.axonframework.extensions.reactor.eventstore.factories.EventTableFactory;
+import org.axonframework.extensions.reactor.eventstore.factories.H2TableFactory;
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventEntryMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.TrackedEventDataMapper;
@@ -81,6 +83,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
     private final ReadSnapshotDataStatementBuilder readSnapshotDataStatementBuilder;
     private final CreateHeadTokenStatementBuilder createHeadTokenStatementBuilder;
     private final DeleteSnapshotsStatementBuilder deleteSnapshotsStatementBuilder;
+    private final EventTableFactory eventTableFactory;
 
 
     public R2dbcEventStoreEngine(Builder builder) {
@@ -113,6 +116,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
         this.deleteSnapshotsStatementBuilder = builder.deleteSnapshotsStatementBuilder;
         this.lastSequenceNumberForStatementBuilder = builder.lastSequenceNumberForStatementBuilder;
         this.readSnapshotDataStatementBuilder = builder.readSnapshotDataStatementBuilder;
+        this.eventTableFactory = builder.eventTableFactory;
     }
 
     public static Builder builder() {
@@ -125,7 +129,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
         return this.databaseClient
                 .inConnectionMany((connection -> {
                     final Statement statement = this.appendSnapshotStatementBuilder.build(connection,
-                            this.eventSchema, dataType, snapshot, serializer, null);
+                            this.eventSchema, dataType, snapshot, serializer);
                     return Flux.from(statement.execute()).flatMap(result -> result.map((row, rowMetadata) -> ""));
                 }))
                 .onErrorResume((error -> this.handlePersistenceError(error, snapshot)))
@@ -190,8 +194,6 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
     }
 
 
-
-
     @Override
     public Flux<DomainEventMessage<?>> readSnapshot(String aggregateIdentifier) {
         return this.readSnapshotData(aggregateIdentifier).map(domainEventMapper::map);
@@ -213,7 +215,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
         return this.databaseClient
                 .inConnectionMany((connection -> {
                     final Statement statement = appendEventsStatementBuilder.build(connection, this.eventSchema, dataType, events,
-                            serializer, null);
+                            serializer);
                     return Flux.from(statement.execute()).flatMap(result -> result.map((row, rowMetadata) -> ""));
                 }))
                 .onErrorResume((error -> this.handlePersistenceError(error, events.get(0))))
@@ -319,12 +321,12 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
     public Mono<Void> createSchema() {
         final Mono<Void> eventMono = this.databaseClient
                 .inConnectionMany((connection -> {
-                    final Statement statement = R2dbcStatementBuilders.createDomainEventTable(connection, this.eventSchema);
+                    final Statement statement = eventTableFactory.createDomainEventTable(connection, this.eventSchema);
                     return Flux.from(statement.execute()).flatMap(result -> result.map((row, rowMetadata) -> ""));
                 }))
                 .then();
         final Mono<Void> snapshotMono = this.databaseClient.inConnectionMany((connection -> {
-            final Statement statement = R2dbcStatementBuilders.createSnapshotEventTable(connection, this.eventSchema);
+            final Statement statement = eventTableFactory.createSnapshotEventTable(connection, this.eventSchema);
             return Flux.from(statement.execute()).flatMap(result -> result.map((row, rowMetadata) -> ""));
         })).then();
         return eventMono.zipWith(snapshotMono).then();
@@ -364,6 +366,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
         Class<?> dataType = byte[].class;
         EventSchema schema = new EventSchema();
         ConnectionFactory connectionFactory;
+        EventTableFactory eventTableFactory = H2TableFactory.INSTANCE;
         int batchSize;
 
         /**
@@ -629,6 +632,12 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
          */
         public Builder extendedGapCheckEnabled(boolean extendedGapCheckEnabled) {
             this.extendedGapCheckEnabled = extendedGapCheckEnabled;
+            return this;
+        }
+
+        public Builder eventTableFactory(EventTableFactory eventTableFactory) {
+            assertNonNull(eventTableFactory, "eventTableFactory cant be null");
+            this.eventTableFactory = eventTableFactory;
             return this;
         }
 

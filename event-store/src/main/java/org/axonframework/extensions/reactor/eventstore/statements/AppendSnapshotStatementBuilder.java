@@ -49,6 +49,5 @@ public interface AppendSnapshotStatementBuilder {
                     EventSchema schema,
                     Class<?> dataType,
                     DomainEventMessage<?> snapshot,
-                    Serializer serializer,
-                    TimestampWriter timestampWriter);
+                    Serializer serializer);
 }

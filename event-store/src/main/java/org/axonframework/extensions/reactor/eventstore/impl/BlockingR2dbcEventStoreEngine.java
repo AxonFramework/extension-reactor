@@ -5,6 +5,8 @@ import org.axonframework.eventhandling.*;
 import org.axonframework.eventsourcing.eventstore.BatchingEventStorageEngine;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
 import org.axonframework.extensions.reactor.eventstore.BlockingReactiveEventStoreEngineSupport;
+import org.axonframework.extensions.reactor.eventstore.factories.EventTableFactory;
+import org.axonframework.extensions.reactor.eventstore.factories.H2TableFactory;
 import org.axonframework.serialization.Serializer;
 import org.axonframework.serialization.upcasting.event.EventUpcaster;
 import org.axonframework.serialization.xml.XStreamSerializer;
@@ -15,13 +17,18 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.axonframework.common.BuilderUtils.assertNonNull;
+import static org.axonframework.common.BuilderUtils.*;
 
 /**
  * @author vtiwar27
  * @date 2020-10-27
  */
 public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
+    private static final int DEFAULT_MAX_GAP_OFFSET = 10000;
+    private static final long DEFAULT_LOWEST_GLOBAL_SEQUENCE = 1;
+    private static final int DEFAULT_GAP_TIMEOUT = 60000;
+    private static final int DEFAULT_GAP_CLEANING_THRESHOLD = 250;
+    private static final boolean DEFAULT_EXTENDED_GAP_CHECK_ENABLED = true;
 
     private final BlockingReactiveEventStoreEngineSupport reactiveEventStoreEngine;
 
@@ -39,6 +46,9 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
                         .dataType(builder.dataType)
                         .upcasterChain(builder.upcasterChain)
                         .extendedGapCheckEnabled(builder.extendedGapCheckEnabled)
+                        .maxGapOffset(builder.maxGapOffset)
+                        .gapCleaningThreshold(builder.gapCleaningThreshold)
+                        .eventTableFactory(builder.eventTableFactory)
                         .batchSize(builder.batchSize).build();
     }
 
@@ -101,12 +111,17 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
     public static class Builder extends BatchingEventStorageEngine.Builder {
         private Class<?> dataType = byte[].class;
         private EventSchema schema = new EventSchema();
+        private EventTableFactory eventTableFactory = H2TableFactory.INSTANCE;
 
         private ConnectionFactory connectionFactory;
         private Serializer serializer = XStreamSerializer.defaultSerializer();
         private int batchSize;
         private EventUpcaster upcasterChain;
         private boolean extendedGapCheckEnabled = true;
+        int maxGapOffset = DEFAULT_MAX_GAP_OFFSET;
+        long lowestGlobalSequence = DEFAULT_LOWEST_GLOBAL_SEQUENCE;
+        int gapTimeout = DEFAULT_GAP_TIMEOUT;
+        int gapCleaningThreshold = DEFAULT_GAP_CLEANING_THRESHOLD;
 
 
         public Builder connectionFactory(ConnectionFactory connectionFactory) {
@@ -139,6 +154,39 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
             return this;
         }
 
+        public Builder maxGapOffset(int maxGapOffset) {
+            assertPositive(maxGapOffset, "maxGapOffset");
+            this.maxGapOffset = maxGapOffset;
+            return this;
+        }
+
+
+        public Builder lowestGlobalSequence(long lowestGlobalSequence) {
+            assertThat(lowestGlobalSequence,
+                    number -> number > 0,
+                    "The lowestGlobalSequence must be a positive number");
+            this.lowestGlobalSequence = lowestGlobalSequence;
+            return this;
+        }
+
+
+        public Builder gapTimeout(int gapTimeout) {
+            assertPositive(gapTimeout, "gapTimeout");
+            this.gapTimeout = gapTimeout;
+            return this;
+        }
+
+        public Builder gapCleaningThreshold(int gapCleaningThreshold) {
+            assertPositive(gapCleaningThreshold, "gapCleaningThreshold");
+            this.gapCleaningThreshold = gapCleaningThreshold;
+            return this;
+        }
+
+        public Builder eventTableFactory(EventTableFactory eventTableFactory) {
+            assertNonNull(eventTableFactory, "eventTableFactory cant be null");
+            this.eventTableFactory = eventTableFactory;
+            return this;
+        }
 
         @Override
         public Builder batchSize(int batchSize) {
@@ -155,6 +203,7 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
             this.upcasterChain = upcasterChain;
             return this;
         }
+
 
         @Override
         public Builder snapshotFilter(Predicate<? super DomainEventData<?>> snapshotFilter) {

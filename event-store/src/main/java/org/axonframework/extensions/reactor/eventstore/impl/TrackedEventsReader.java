@@ -113,9 +113,7 @@ public class TrackedEventsReader {
     private Flux<TrackedEventData<?>> getTrackedEvents(GapAwareTrackingToken cleanedToken, int batchSize) {
         return this.databaseClient.inConnectionMany(connection -> {
             final Statement statement = this.readEventData(connection, cleanedToken, batchSize);
-            return Flux.from(statement.execute()).flatMap(r -> {
-                return r.map((this.trackedEventDataMapper::map));
-            });
+            return Flux.from(statement.execute()).flatMap(r -> r.map((this.trackedEventDataMapper::map)));
         }).collectList().flatMapMany((results) -> {
             List<TrackedEventData<?>> trackedEventDataList =
                     getTrackedEventData(cleanedToken, results);
