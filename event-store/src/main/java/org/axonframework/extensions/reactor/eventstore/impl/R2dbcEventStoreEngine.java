@@ -329,7 +329,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
             final Statement statement = eventTableFactory.createSnapshotEventTable(connection, this.eventSchema);
             return Flux.from(statement.execute()).flatMap(result -> result.map((row, rowMetadata) -> ""));
         })).then();
-        return eventMono.zipWith(snapshotMono).then();
+        return Flux.concat(eventMono, snapshotMono).then();
     }
 
 
