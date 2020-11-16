@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
-package org.axonframework.extensions.reactor.eventstore;
+package org.axonframework.extensions.reactor.eventstore.r2dbc;
 
 import io.r2dbc.h2.H2ConnectionConfiguration;
 import io.r2dbc.h2.H2ConnectionFactory;
 import io.r2dbc.spi.ConnectionFactory;
 import org.axonframework.common.jdbc.PersistenceExceptionResolver;
 import org.axonframework.eventhandling.*;
+import org.axonframework.eventsourcing.eventstore.AbstractEventStorageEngine;
 import org.axonframework.eventsourcing.eventstore.EmbeddedEventStore;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
+import org.axonframework.extensions.reactor.eventstore.BatchingEventStorageEngineTest;
+import org.axonframework.extensions.reactor.eventstore.R2dbSqlErrorCodeResolver;
 import org.axonframework.extensions.reactor.eventstore.factories.EventTableFactory;
-import org.axonframework.extensions.reactor.eventstore.factories.H2TableFactory;
+import org.axonframework.extensions.reactor.eventstore.factories.H2EventTableFactory;
 import org.axonframework.extensions.reactor.eventstore.impl.BlockingR2dbcEventStoreEngine;
 import org.axonframework.serialization.UnknownSerializedType;
 import org.axonframework.serialization.upcasting.event.EventUpcaster;
@@ -32,6 +35,7 @@ import org.axonframework.serialization.upcasting.event.NoOpEventUpcaster;
 import org.axonframework.serialization.xml.XStreamSerializer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.annotation.DirtiesContext;
 
 import java.sql.SQLException;
 import java.time.Clock;
@@ -52,7 +56,7 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * @author Rene de Waele
  */
-public class R2dbcEventStorageEngineTest {
+public class R2dbcEventStorageEngineTest extends BatchingEventStorageEngineTest {
 
 
     private PersistenceExceptionResolver defaultPersistenceExceptionResolver;
@@ -60,8 +64,9 @@ public class R2dbcEventStorageEngineTest {
 
     @BeforeEach
     public void setUp() {
-        testSubject = createEngine(NoOpEventUpcaster.INSTANCE, defaultPersistenceExceptionResolver,
-                new EventSchema(), byte[].class, H2TableFactory.INSTANCE);
+        defaultPersistenceExceptionResolver = new R2dbSqlErrorCodeResolver();
+        setTestSubject(testSubject = createEngine(NoOpEventUpcaster.INSTANCE, defaultPersistenceExceptionResolver,
+                new EventSchema(), byte[].class, H2EventTableFactory.INSTANCE));
     }
 
     @Test
@@ -76,6 +81,22 @@ public class R2dbcEventStorageEngineTest {
         testSubject.appendEvents(createEvent(aggregateId, 0), createEvent(aggregateId, 1));
         assertEquals(1L, (long) testSubject.lastSequenceNumberFor(aggregateId).orElse(-1L));
         assertFalse(testSubject.lastSequenceNumberFor("inexistent").isPresent());
+    }
+
+    @Test
+    @DirtiesContext
+    public void testCustomSchemaConfig() {
+        setTestSubject(testSubject = createEngine(NoOpEventUpcaster.INSTANCE, defaultPersistenceExceptionResolver,
+                EventSchema.builder()
+                        .eventTable("CustomDomainEvent")
+                        .payloadColumn("eventData").build(), String.class,
+                new H2EventTableFactory() {
+                    @Override
+                    protected String payloadType() {
+                        return "LONGVARCHAR";
+                    }
+                }));
+        testStoreAndLoadEvents();
     }
 
 
@@ -378,7 +399,7 @@ public class R2dbcEventStorageEngineTest {
                 snapshot -> true,
                 eventSchema,
                 byte[].class,
-                H2TableFactory.INSTANCE,
+                H2EventTableFactory.INSTANCE,
                 batchSize);
     }
 
@@ -388,7 +409,7 @@ public class R2dbcEventStorageEngineTest {
                 snapshotFilter,
                 new EventSchema(),
                 byte[].class,
-                H2TableFactory.INSTANCE,
+                H2EventTableFactory.INSTANCE,
                 100);
     }
 
@@ -407,6 +428,8 @@ public class R2dbcEventStorageEngineTest {
                 .batchSize(batchSize)
                 .snapshotFilter(snapshotFilter)
                 .eventTableFactory(tableFactory)
+                .upcasterChain(upcasterChain)
+                .persistenceExceptionResolver(persistenceExceptionResolver)
                 .build();
         createSchema(result);
 
@@ -425,5 +448,20 @@ public class R2dbcEventStorageEngineTest {
                 .url("mem:testdb;DB_CLOSE_DELAY=-1;")
                 .username("sa")
                 .build());
+    }
+
+    @Override
+    protected AbstractEventStorageEngine createEngine(EventUpcaster upcasterChain) {
+        return createEngine(upcasterChain, defaultPersistenceExceptionResolver, new EventSchema(), byte[].class,
+                H2EventTableFactory.INSTANCE);
+    }
+
+    @Override
+    protected AbstractEventStorageEngine createEngine(PersistenceExceptionResolver persistenceExceptionResolver) {
+        return createEngine(NoOpEventUpcaster.INSTANCE,
+                persistenceExceptionResolver,
+                new EventSchema(),
+                byte[].class,
+                H2EventTableFactory.INSTANCE);
     }
 }

@@ -13,7 +13,7 @@ import org.axonframework.extensions.reactor.eventstore.BlockingReactiveEventStor
 import org.axonframework.extensions.reactor.eventstore.R2dbSqlErrorCodeResolver;
 import org.axonframework.extensions.reactor.eventstore.ReactiveEventStoreEngine;
 import org.axonframework.extensions.reactor.eventstore.factories.EventTableFactory;
-import org.axonframework.extensions.reactor.eventstore.factories.H2TableFactory;
+import org.axonframework.extensions.reactor.eventstore.factories.H2EventTableFactory;
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventEntryMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.DomainEventMapper;
 import org.axonframework.extensions.reactor.eventstore.mappers.TrackedEventDataMapper;
@@ -366,7 +366,7 @@ public class R2dbcEventStoreEngine implements ReactiveEventStoreEngine, Blocking
         Class<?> dataType = byte[].class;
         EventSchema schema = new EventSchema();
         ConnectionFactory connectionFactory;
-        EventTableFactory eventTableFactory = H2TableFactory.INSTANCE;
+        EventTableFactory eventTableFactory = H2EventTableFactory.INSTANCE;
         int batchSize;
 
         /**

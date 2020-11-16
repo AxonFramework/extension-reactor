@@ -5,6 +5,7 @@ import io.r2dbc.spi.Statement;
 import org.axonframework.eventhandling.DomainEventMessage;
 import org.axonframework.eventhandling.EventMessage;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
+import org.axonframework.extensions.reactor.eventstore.utils.CommonUtils;
 import org.axonframework.serialization.SerializedObject;
 import org.axonframework.serialization.Serializer;
 import org.springframework.util.StringUtils;
@@ -33,17 +34,14 @@ public class R2dbcStatementBuilders {
             DomainEventMessage<?> event = asDomainEventMessage(eventMessage);
             SerializedObject<?> payload = event.serializePayload(serializer, dataType);
             SerializedObject<?> metaData = event.serializeMetaData(serializer, dataType);
+
             statement.bind("$1", event.getIdentifier());
             statement.bind("$2", event.getAggregateIdentifier());
             statement.bind("$3", event.getSequenceNumber());
-            statement.bind("$4", event.getType());
+            CommonUtils.bindNullable(statement, "$4", event.getType(), String.class);
             statement.bind("$5", formatInstant(event.getTimestamp()));
             statement.bind("$6", payload.getType().getName());
-            if (StringUtils.hasText(payload.getType().getRevision())) {
-                statement.bind("$7", payload.getType().getRevision());
-            } else {
-                statement.bindNull("$7", String.class);
-            }
+            CommonUtils.bindNullable(statement, "$7", payload.getType().getRevision(), String.class);
             statement.bind("$8", payload.getData());
             statement.bind("$9", metaData.getData());
             statement.add();

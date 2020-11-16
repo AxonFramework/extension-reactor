@@ -23,17 +23,17 @@ package org.axonframework.extensions.reactor.eventstore.factories;
  * @author Rene de Waele
  * @since 3.0
  */
-public class H2TableFactory extends AbstractEventTableFactory {
+public class H2EventTableFactory extends AbstractEventTableFactory {
 
     /**
-     * Singleton H2TableFactory instance
+     * Singleton H2EventTableFactory instance
      */
-    public static final H2TableFactory INSTANCE = new H2TableFactory();
+    public static final H2EventTableFactory INSTANCE = new H2EventTableFactory();
 
     /**
      * Default constructor of the factory
      */
-    protected H2TableFactory() {
+    protected H2EventTableFactory() {
     }
 
     @Override

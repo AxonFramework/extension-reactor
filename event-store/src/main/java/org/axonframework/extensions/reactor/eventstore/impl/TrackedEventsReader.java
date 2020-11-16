@@ -76,20 +76,17 @@ public class TrackedEventsReader {
                         return Mono.just(token);
                     }
                 })
-                .flatMap((token) -> Mono.just(token).contextWrite(context -> context.put("token", token)))
-                .flatMapMany(gapAwareTrackingToken -> this.getTrackedEvents((GapAwareTrackingToken) gapAwareTrackingToken.orElse(null), batchSize))
-                .collectList()
-                .flatMapMany((results) -> {
-                    if (extendedGapCheckEnabled && results.isEmpty()) {
-                        return getTrackedEventData(lastToken);
-                    } else {
-                        return Flux.fromIterable(results);
-                    }
-                })
-                .onErrorResume((error) -> Mono.deferContextual(contextView -> {
-                    final Optional<Object> cleanedToken = contextView.getOrEmpty(GapAwareTrackingToken.class);
-                    return Mono.error(new EventStoreException("Failed to read events from token", error));
-                }))
+                .flatMapMany((token) -> this
+                        .getTrackedEvents((GapAwareTrackingToken) token.orElse(null), batchSize)
+                        .collectList()
+                        .flatMapMany((results) -> {
+                            if (extendedGapCheckEnabled && results.isEmpty()) {
+                                return getTrackedEventData(token.orElse(null));
+                            } else {
+                                return Flux.fromIterable(results);
+                            }
+                        }))
+                .onErrorResume((error) -> Mono.error(new EventStoreException("Failed to read events from token", error)))
                 .as(this.transactionalOperator::transactional);
 
     }

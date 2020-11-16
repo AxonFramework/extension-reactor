@@ -1,12 +1,13 @@
 package org.axonframework.extensions.reactor.eventstore.impl;
 
 import io.r2dbc.spi.ConnectionFactory;
+import org.axonframework.common.jdbc.PersistenceExceptionResolver;
 import org.axonframework.eventhandling.*;
 import org.axonframework.eventsourcing.eventstore.BatchingEventStorageEngine;
 import org.axonframework.eventsourcing.eventstore.jdbc.EventSchema;
 import org.axonframework.extensions.reactor.eventstore.BlockingReactiveEventStoreEngineSupport;
 import org.axonframework.extensions.reactor.eventstore.factories.EventTableFactory;
-import org.axonframework.extensions.reactor.eventstore.factories.H2TableFactory;
+import org.axonframework.extensions.reactor.eventstore.factories.H2EventTableFactory;
 import org.axonframework.serialization.Serializer;
 import org.axonframework.serialization.upcasting.event.EventUpcaster;
 import org.axonframework.serialization.xml.XStreamSerializer;
@@ -49,6 +50,7 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
                         .maxGapOffset(builder.maxGapOffset)
                         .gapCleaningThreshold(builder.gapCleaningThreshold)
                         .eventTableFactory(builder.eventTableFactory)
+                        .persistenceExceptionResolver(builder.persistenceExceptionResolver)
                         .batchSize(builder.batchSize).build();
     }
 
@@ -111,7 +113,8 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
     public static class Builder extends BatchingEventStorageEngine.Builder {
         private Class<?> dataType = byte[].class;
         private EventSchema schema = new EventSchema();
-        private EventTableFactory eventTableFactory = H2TableFactory.INSTANCE;
+        private EventTableFactory eventTableFactory = H2EventTableFactory.INSTANCE;
+        private PersistenceExceptionResolver persistenceExceptionResolver;
 
         private ConnectionFactory connectionFactory;
         private Serializer serializer = XStreamSerializer.defaultSerializer();
@@ -204,6 +207,13 @@ public class BlockingR2dbcEventStoreEngine extends BatchingEventStorageEngine {
             return this;
         }
 
+        @Override
+        public Builder persistenceExceptionResolver(PersistenceExceptionResolver
+                                                            persistenceExceptionResolver) {
+            super.persistenceExceptionResolver(persistenceExceptionResolver);
+            this.persistenceExceptionResolver = persistenceExceptionResolver;
+            return this;
+        }
 
         @Override
         public Builder snapshotFilter(Predicate<? super DomainEventData<?>> snapshotFilter) {
