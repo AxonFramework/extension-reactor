@@ -52,7 +52,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Maven operation without Sonar
-        if: matrix.sonar-enabled
+        if: matrix.sonar-enabled != true
         run: |
           mvn -B -U clean verify
         env:
