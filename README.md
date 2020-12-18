@@ -1,7 +1,7 @@
 # Axon Framework - Reactor Extension 
 
 [![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.axonframework.extensions.reactor/axon-reactor/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.axonframework.extensions.reactor/axon-reactor/)
-[![Build Status](https://travis-ci.org/AxonFramework/extension-reactor.svg?branch=master)](https://travis-ci.org/AxonFramework/extension-reactor)
+![Build Status](https://github.com/AxonFramework/extension-reactor/workflows/Reactor%20Extension/badge.svg?branch=master)
 [![SonarCloud Gate Status](https://sonarcloud.io/api/project_badges/measure?project=AxonFramework_extension-reactor&metric=alert_status)](https://sonarcloud.io/dashboard?id=AxonFramework_extension-reactor)
 
 Axon Framework is a framework for building evolutionary, event-driven microservice systems,
