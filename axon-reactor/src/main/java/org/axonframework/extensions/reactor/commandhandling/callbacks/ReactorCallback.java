@@ -27,11 +27,8 @@ public class ReactorCallback<C, R> extends Mono<CommandResultMessage<? extends R
     @Override
     public void onResult(CommandMessage<? extends C> commandMessage,
                          CommandResultMessage<? extends R> commandResultMessage) {
-        if (commandResultMessage.isExceptional()) {
-            sink.error(commandResultMessage.exceptionResult());
-        } else {
-            sink.next(commandResultMessage);
-        }
+
+        sink.next(commandResultMessage);
         sink.complete();
     }
 

@@ -5,6 +5,7 @@ import org.axonframework.commandhandling.gateway.RetryScheduler;
 import org.axonframework.commandhandling.gateway.RetryingCallback;
 import org.axonframework.common.AxonConfigurationException;
 import org.axonframework.common.Registration;
+import org.axonframework.extensions.reactor.commandhandling.callbacks.ReactorCallback;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
 import org.axonframework.extensions.reactor.messaging.ReactorResultHandlerInterceptor;
 import org.axonframework.extensions.reactor.commandhandling.callbacks.ReactorCallback;
@@ -141,8 +142,8 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
                 .map(it -> (R) it.getPayload());
     }
 
-    private Mono<? extends CommandResultMessage<?>> mapExceptionalResult(CommandResultMessage<?> response) {
-        return response.isExceptional() ? Mono.error(response.exceptionResult()) : Mono.just(response);
+    private Mono<? extends CommandResultMessage<?>> mapExceptionalResult(CommandResultMessage<?> result) {
+        return result.isExceptional() ? Mono.error(result.exceptionResult()) : Mono.just(result);
     }
 
     /**

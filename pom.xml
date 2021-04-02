@@ -48,18 +48,18 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <axon.version>4.4.3</axon.version>
-        <projectreactor.version>3.3.6.RELEASE</projectreactor.version>
+        <axon.version>4.4.7</axon.version>
+        <projectreactor.version>3.4.4</projectreactor.version>
 
-        <spring.version>5.2.9.RELEASE</spring.version>
-        <spring.boot.version>2.2.6.RELEASE</spring.boot.version>
+        <spring.version>5.3.3</spring.version>
+        <spring.boot.version>2.4.2</spring.boot.version>
 
         <slf4j.version>1.7.28</slf4j.version>
         <log4j.version>2.13.0</log4j.version>
-        <jacoco-maven-plugin.version>0.8.5</jacoco-maven-plugin.version>
+        <jacoco-maven-plugin.version>0.8.6</jacoco-maven-plugin.version>
 
-        <junit.jupiter.version>5.7.0</junit.jupiter.version>
-        <mockito.version>3.1.0</mockito.version>
+        <junit.jupiter.version>5.7.1</junit.jupiter.version>
+        <mockito.version>3.7.7</mockito.version>
     </properties>
 
     <dependencyManagement>
@@ -99,13 +99,6 @@
                 <groupId>io.projectreactor</groupId>
                 <artifactId>reactor-test</artifactId>
                 <version>${projectreactor.version}</version>
-                <scope>test</scope>
-            </dependency>
-
-            <dependency>
-                <groupId>org.junit.jupiter</groupId>
-                <artifactId>junit-jupiter-api</artifactId>
-                <version>${junit.jupiter.version}</version>
                 <scope>test</scope>
             </dependency>
 
@@ -157,7 +150,7 @@
         <plugins>
             <plugin>
                 <artifactId>maven-resources-plugin</artifactId>
-                <version>3.0.2</version>
+                <version>3.2.0</version>
                 <configuration>
                     <encoding>UTF-8</encoding>
                 </configuration>
@@ -168,7 +161,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.5.1</version>
+                <version>3.8.1</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -178,7 +171,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
-                <version>2.6</version>
+                <version>3.3.0</version>
                 <configuration>
                     <descriptorSourceDirectory>assembly</descriptorSourceDirectory>
                     <archiverConfig>
@@ -197,7 +190,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.19.1</version>
+                <version>2.22.2</version>
                 <configuration>
                     <includes>
                         <include>**/*Test.java</include>
@@ -229,7 +222,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.0.2</version>
+                <version>3.2.0</version>
                 <configuration>
                     <archive>
                         <manifest>
