@@ -181,7 +181,7 @@ public interface ReactorQueryGateway extends ReactorMessageDispatchInterceptorSu
      * @param query      The {@code query} to be sent
      * @param resultType The response type used for this query
      * @param <Q>        The type of the query
-     * @param <R>        The type of the result (initial & updates)
+     * @param <R>        The type of the result (initial and updates)
      * @return Flux which can be used to cancel receiving updates
      *
      * @see QueryBus#subscriptionQuery(SubscriptionQueryMessage)
@@ -207,7 +207,7 @@ public interface ReactorQueryGateway extends ReactorMessageDispatchInterceptorSu
      * @param query      The {@code query} to be sent
      * @param resultType The response type used for this query
      * @param <Q>        The type of the query
-     * @param <R>        The type of the result (initial & updates)
+     * @param <R>        The type of the result (initial and updates)
      * @return Flux which can be used to cancel receiving updates
      *
      * @see QueryBus#subscriptionQuery(SubscriptionQueryMessage)
@@ -231,7 +231,7 @@ public interface ReactorQueryGateway extends ReactorMessageDispatchInterceptorSu
      * @param query      The {@code query} to be sent
      * @param resultType The response type used for this query
      * @param <Q>        The type of the query
-     * @param <R>        The type of the result (initial & updates)
+     * @param <R>        The type of the result (initial and updates)
      * @return Flux which can be used to cancel receiving updates
      *
      * @see QueryBus#subscriptionQuery(SubscriptionQueryMessage)

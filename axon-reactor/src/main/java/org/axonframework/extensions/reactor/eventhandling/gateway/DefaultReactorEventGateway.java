@@ -6,10 +6,13 @@ import org.axonframework.eventhandling.EventBus;
 import org.axonframework.eventhandling.EventMessage;
 import org.axonframework.eventhandling.GenericEventMessage;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
+import org.axonframework.messaging.MetaData;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.context.ContextView;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 import static java.util.Arrays.asList;
@@ -57,9 +60,22 @@ public class DefaultReactorEventGateway implements ReactorEventGateway {
     @Override
     public Flux<EventMessage<?>> publish(List<?> events) {
         return Flux.fromIterable(events)
-                   .map(event -> Mono.<EventMessage<?>>just(GenericEventMessage.asEventMessage(event)))
+                   .map(this::createEventMessage)
                    .flatMap(this::processEventInterceptors)
                    .flatMap(this::publishEvent);
+    }
+
+    private Mono<EventMessage<?>> createEventMessage(Object event) {
+        return Mono.just(event)
+                .transformDeferredContextual((eventMono,contextView) ->
+                        eventMono.map(ev -> GenericEventMessage.asEventMessage(ev)
+                                .andMetaData(metaDataFromContext(contextView))
+                        ));
+
+    }
+
+    private MetaData metaDataFromContext(ContextView contextView) {
+        return contextView.getOrDefault(MetaData.class, MetaData.emptyInstance());
     }
 
     @Override

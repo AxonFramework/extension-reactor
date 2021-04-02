@@ -7,7 +7,10 @@ import org.axonframework.commandhandling.GenericCommandResultMessage;
 import org.axonframework.commandhandling.gateway.RetryScheduler;
 import org.axonframework.common.Registration;
 import org.axonframework.messaging.MessageHandler;
+import org.axonframework.messaging.MetaData;
+import org.axonframework.queryhandling.QueryMessage;
 import org.junit.jupiter.api.*;
+import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Hooks;
 import reactor.core.publisher.Mono;
@@ -23,6 +26,7 @@ import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
+import static reactor.util.context.Context.of;
 
 /**
  * Tests for {@link DefaultReactorCommandGateway} all together with Command Bus.
@@ -100,7 +104,7 @@ class DefaultReactorCommandGatewayComponentTest {
         Mono<String> result = reactiveCommandGateway.send("command");
         verifyNoMoreInteractions(commandMessageHandler);
 
-        Context context = Context.of("k1", "v1");
+        Context context = of("k1", "v1");
 
         StepVerifier.create(result.subscriberContext(context))
                     .expectNext("handled")
@@ -108,6 +112,33 @@ class DefaultReactorCommandGatewayComponentTest {
                     .containsOnly(context)
                     .then()
                     .verifyComplete();
+        verify(commandMessageHandler).handle(any());
+        verifyNoMoreInteractions(mockRetryScheduler);
+    }
+
+    @Test
+    void testQuerySetMetaDataViaContext() throws Exception {
+        Mono<String> result = reactiveCommandGateway.send("command");
+        verifyNoMoreInteractions(commandMessageHandler);
+
+        Context context = of(MetaData.class, MetaData.with("k","v"));
+
+        StepVerifier.create(result.subscriberContext(context))
+                .expectNext("handled")
+                .expectAccessibleContext()
+                .containsOnly(context)
+                .then()
+                .verifyComplete();
+
+        ArgumentCaptor<CommandMessage> commandMessageCaptor =  ArgumentCaptor.forClass(CommandMessage.class);
+
+        
+        verify(commandBus).dispatch(commandMessageCaptor.capture(),any());
+        CommandMessage commandMessage = commandMessageCaptor.getValue();
+
+        assertTrue(commandMessage.getMetaData().containsKey("k"));
+        assertTrue(commandMessage.getMetaData().containsValue("v"));
+
         verify(commandMessageHandler).handle(any());
         verifyNoMoreInteractions(mockRetryScheduler);
     }
@@ -186,7 +217,7 @@ class DefaultReactorCommandGatewayComponentTest {
 
     @Test
     void testSendWithDispatchInterceptorWithContext() {
-        Context context = Context.of("security", true);
+        Context context = of("security", true);
 
         reactiveCommandGateway
                 .registerDispatchInterceptor(cmdMono -> cmdMono
@@ -207,7 +238,7 @@ class DefaultReactorCommandGatewayComponentTest {
 
     @Test
     void testSendWithDispatchInterceptorWithContextFiltered() {
-        Context context = Context.of("security", false);
+        Context context = of("security", false);
 
         reactiveCommandGateway
                 .registerDispatchInterceptor(cmdMono -> cmdMono

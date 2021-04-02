@@ -14,8 +14,7 @@ import java.util.List;
 
 /**
  * Variation of the {@link EventGateway}, wrapping a {@link EventBus} for a friendlier API. Provides support for
- * reactive return types such as {@link Flux} from Project
- * Reactor.
+ * reactive return types such as {@link Flux} from Project Reactor.
  *
  * @author Milan Savic
  * @since 4.4.2
@@ -24,7 +23,7 @@ public interface ReactorEventGateway extends ReactorMessageDispatchInterceptorSu
 
     /**
      * Publishes given {@code events} once the caller subscribes to the resulting Flux. Returns immediately.
-     * <p/>
+     * <p>
      * Given {@code events} are wrapped as payloads of a {@link EventMessage} that are eventually published on the
      * {@link EventBus}, unless {@code event} already implements {@link Message}. In that case, a {@code EventMessage}
      * is constructed from that message's payload and {@link org.axonframework.messaging.MetaData}.
@@ -39,8 +38,9 @@ public interface ReactorEventGateway extends ReactorMessageDispatchInterceptorSu
     }
 
     /**
-     * Publishes the given {@code events} once the caller subscribes to the resulting {@link Flux}. Returns immediately.
-     * <p/>
+     * Publishes the given {@code events} once the caller subscribes to the resulting {@link Flux}. Returns
+     * immediately.
+     * <p>
      * Given {@code events} are wrapped as payloads of a {@link EventMessage} that are eventually published on the
      * {@link EventBus}, unless {@code event} already implements {@link Message}. In that case, a {@code EventMessage}
      * is constructed from that message's payload and {@link org.axonframework.messaging.MetaData}.
@@ -53,8 +53,9 @@ public interface ReactorEventGateway extends ReactorMessageDispatchInterceptorSu
     Flux<EventMessage<?>> publish(List<?> events);
 
     /**
-     * Publishes the given {@code events} once the caller subscribes to the resulting {@link Flux}. Returns immediately.
-     * <p/>
+     * Publishes the given {@code events} once the caller subscribes to the resulting {@link Flux}. Returns
+     * immediately.
+     * <p>
      * Given {@code events} are wrapped as payloads of a {@link EventMessage} that are eventually published on the
      * {@link EventBus}, unless {@code event} already implements {@link Message}. In that case, a {@code EventMessage}
      * is constructed from that message's payload and {@link org.axonframework.messaging.MetaData}.

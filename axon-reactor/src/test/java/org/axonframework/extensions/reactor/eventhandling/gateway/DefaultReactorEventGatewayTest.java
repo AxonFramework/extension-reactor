@@ -5,11 +5,15 @@ import org.axonframework.eventhandling.EventMessage;
 import org.axonframework.eventhandling.GenericEventMessage;
 import org.axonframework.messaging.Message;
 import org.axonframework.messaging.MetaData;
+import org.axonframework.queryhandling.QueryMessage;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.*;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.*;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import reactor.util.context.Context;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -19,6 +23,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.*;
+import static reactor.util.context.Context.of;
 
 /**
  * Tests for {@link DefaultReactorEventGateway}.
@@ -50,6 +55,34 @@ class DefaultReactorEventGatewayTest {
                     .verifyComplete();
 
         verify(eventBus).publish(any(EventMessage.class));
+    }
+
+    @Test
+    void testEventSetMetaDataViaContext() {
+        Context context = of(MetaData.class, MetaData.with("k","v"));
+
+        Flux<String> result = gateway.publish("event")
+                .map(Message::getPayload)
+                .cast(String.class)
+                .subscriberContext(context);
+
+        StepVerifier.create(result)
+                .expectNext("event")
+                .expectAccessibleContext()
+                .containsOnly(context)
+                .then()
+                .verifyComplete();
+
+
+        ArgumentCaptor<GenericEventMessage> eventMessageCaptor =  ArgumentCaptor.forClass(GenericEventMessage.class);
+
+
+        verify(eventBus).publish(eventMessageCaptor.capture());
+        GenericEventMessage eventMessage = eventMessageCaptor.getValue();
+
+        assertTrue(eventMessage.getMetaData().containsKey("k"));
+        assertTrue(eventMessage.getMetaData().containsValue("v"));
+
     }
 
     @Test
