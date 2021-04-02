@@ -9,6 +9,7 @@ import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInte
 import org.axonframework.messaging.MetaData;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.context.ContextView;
 
 import java.util.List;
 import java.util.Objects;
@@ -66,16 +67,15 @@ public class DefaultReactorEventGateway implements ReactorEventGateway {
 
     private Mono<EventMessage<?>> createEventMessage(Object event) {
         return Mono.just(event)
-                .zipWith(metaDataFromContext())
-                .map(eventAndMeta -> GenericEventMessage.asEventMessage(eventAndMeta.getT1())
-                        .andMetaData(eventAndMeta.getT2()));
+                .transformDeferredContextual((eventMono,contextView) ->
+                        eventMono.map(ev -> GenericEventMessage.asEventMessage(ev)
+                                .andMetaData(metaDataFromContext(contextView))
+                        ));
+
     }
 
-    private Mono<MetaData> metaDataFromContext() {
-        return Mono.subscriberContext()
-                .handle((ctx,sink) -> sink.next(Objects.requireNonNull(
-                        ctx.getOrDefault(MetaData.class, MetaData.emptyInstance())
-                )));
+    private MetaData metaDataFromContext(ContextView contextView) {
+        return contextView.getOrDefault(MetaData.class, MetaData.emptyInstance());
     }
 
     @Override
