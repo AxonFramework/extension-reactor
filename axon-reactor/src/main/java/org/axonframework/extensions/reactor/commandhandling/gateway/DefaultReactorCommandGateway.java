@@ -8,10 +8,10 @@ import org.axonframework.common.Registration;
 import org.axonframework.extensions.reactor.commandhandling.callbacks.ReactorCallback;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
 import org.axonframework.extensions.reactor.messaging.ReactorResultHandlerInterceptor;
-import org.axonframework.extensions.reactor.commandhandling.callbacks.ReactorCallback;
 import org.axonframework.messaging.MetaData;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.context.ContextView;
 import reactor.util.function.Tuple2;
 
 import java.util.List;
@@ -79,16 +79,13 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
 
     private Mono<CommandMessage<?>> createCommandMessage(Object command) {
         return Mono.just(command)
-                .zipWith(metaDataFromContext())
-                .map(commandAndMeta -> GenericCommandMessage.asCommandMessage(commandAndMeta.getT1())
-                        .andMetaData(commandAndMeta.getT2()));
+                .transformDeferredContextual((commandMono, contextView) ->
+                        commandMono.map(c -> GenericCommandMessage.asCommandMessage(c)
+                                .andMetaData(metaDataFromContext(contextView))));
     }
 
-    private Mono<MetaData> metaDataFromContext() {
-        return Mono.subscriberContext()
-                .handle((ctx,sink) -> sink.next(Objects.requireNonNull(
-                        ctx.getOrDefault(MetaData.class, MetaData.emptyInstance())
-                )));
+    private MetaData metaDataFromContext(ContextView contextView) {
+        return contextView.getOrDefault(MetaData.class, MetaData.emptyInstance());
     }
 
     @Override
@@ -106,13 +103,13 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
 
     private Mono<CommandMessage<?>> processCommandInterceptors(Mono<CommandMessage<?>> commandMessage) {
         return Flux.fromIterable(dispatchInterceptors)
-                   .reduce(commandMessage, (command, interceptor) -> interceptor.intercept(command))
-                   .flatMap(Function.identity());
+                .reduce(commandMessage, (command, interceptor) -> interceptor.intercept(command))
+                .flatMap(Function.identity());
     }
 
     private <C, R> Mono<Tuple2<CommandMessage<C>, Flux<CommandResultMessage<? extends R>>>> dispatchCommand(
             CommandMessage<C> commandMessage) {
-        return Mono.defer(()-> {
+        return Mono.defer(() -> {
             ReactorCallback<C, R> reactorCallback = new ReactorCallback<>();
             CommandCallback<C, R> callback = reactorCallback;
             if (retryScheduler != null) {
@@ -130,9 +127,9 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
                 .flatMapSequential(this::mapExceptionalResult);
 
         return Flux.fromIterable(resultInterceptors)
-                   .reduce(commandResultMessages,
-                           (result, interceptor) -> interceptor.intercept(commandMessage, result))
-                   .flatMap(Flux::next); // command handlers provide only one result!
+                .reduce(commandResultMessages,
+                        (result, interceptor) -> interceptor.intercept(commandMessage, result))
+                .flatMap(Flux::next); // command handlers provide only one result!
     }
 
     private <R> Mono<R> getPayload(Mono<? extends CommandResultMessage<?>> commandResultMessage) {

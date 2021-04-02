@@ -10,6 +10,7 @@ import org.axonframework.messaging.responsetypes.ResponseType;
 import org.axonframework.queryhandling.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.util.context.ContextView;
 import reactor.util.function.Tuple2;
 
 import java.time.Duration;
@@ -94,23 +95,19 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
 
     public <R, Q> Mono<QueryMessage<?, ?>> createQueryMessage(String queryName, Q query, ResponseType<R> responseType) {
         return Mono.fromCallable(() -> new GenericQueryMessage<>(asMessage(query), queryName, responseType))
-                .zipWith(metaDataFromContext())
-                .map(queryAndMeta -> queryAndMeta.getT1().andMetaData(queryAndMeta.getT2()));
+                .transformDeferredContextual((queryMono, contextView) ->
+                        queryMono.map(q -> q.andMetaData(metaDataFromContext(contextView))));
     }
 
-
-    private Mono<MetaData> metaDataFromContext() {
-        return Mono.subscriberContext()
-                .handle((ctx,sink) -> sink.next(Objects.requireNonNull(
-                        ctx.getOrDefault(MetaData.class, MetaData.emptyInstance())
-                )));
+    private MetaData metaDataFromContext(ContextView contextView) {
+        return contextView.getOrDefault(MetaData.class, MetaData.emptyInstance());
     }
 
     @Override
     public <R, Q> Flux<R> scatterGather(String queryName, Q query, ResponseType<R> responseType, Duration timeout) {
         return Mono.<QueryMessage<?, ?>>fromCallable(() -> new GenericQueryMessage<>(asMessage(query),
-                                                                                     queryName,
-                                                                                     responseType))
+                queryName,
+                responseType))
                 .transform(this::processDispatchInterceptors)
                 .flatMap(q -> dispatchScatterGatherQuery(q, timeout.toMillis(), TimeUnit.MILLISECONDS))
                 .flatMapMany(this::processResultsInterceptors)
@@ -126,8 +123,8 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
 
         //noinspection unchecked
         return Mono.<QueryMessage<?, ?>>fromCallable(() -> new GenericSubscriptionQueryMessage<>(query,
-                                                                                                 initialResponseType,
-                                                                                                 updateResponseType))
+                initialResponseType,
+                updateResponseType))
                 .transform(this::processDispatchInterceptors)
                 .map(interceptedQuery -> (SubscriptionQueryMessage<Q, U, I>) interceptedQuery)
                 .flatMap(isq -> dispatchSubscriptionQuery(isq, backpressure, updateBufferSize))
@@ -147,8 +144,8 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
             QueryMessage<?, ?> queryMessage, long timeout, TimeUnit timeUnit) {
         Flux<ResultMessage<?>> results = Flux
                 .defer(() -> Flux.fromStream(queryBus.scatterGather(queryMessage,
-                                                                    timeout,
-                                                                    timeUnit)));
+                        timeout,
+                        timeUnit)));
 
         return Mono.<QueryMessage<?, ?>>just(queryMessage)
                 .zipWith(Mono.just(results));
@@ -165,8 +162,8 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
 
     private Mono<QueryMessage<?, ?>> processDispatchInterceptors(Mono<QueryMessage<?, ?>> queryMessageMono) {
         return Flux.fromIterable(dispatchInterceptors)
-                   .reduce(queryMessageMono, (queryMessage, interceptor) -> interceptor.intercept(queryMessage))
-                   .flatMap(Mono::from);
+                .reduce(queryMessageMono, (queryMessage, interceptor) -> interceptor.intercept(queryMessage))
+                .flatMap(Mono::from);
     }
 
     private Flux<ResultMessage<?>> processResultsInterceptors(
@@ -176,9 +173,9 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
                 .flatMapSequential(this::mapExceptionalResult);
 
         return Flux.fromIterable(resultInterceptors)
-                   .reduce(queryResultMessage,
-                           (result, interceptor) -> interceptor.intercept(queryMessage, result))
-                   .flatMapMany(Function.identity());
+                .reduce(queryResultMessage,
+                        (result, interceptor) -> interceptor.intercept(queryMessage, result))
+                .flatMapMany(Function.identity());
     }
 
     private <Q, I, U> Function<Tuple2<QueryMessage<Q, U>,
@@ -198,8 +195,8 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
                     .transform(this::getPayload);
 
             return new DefaultSubscriptionQueryResult<>(interceptedInitialResult,
-                                                        interceptedUpdates,
-                                                        subscriptionResult);
+                    interceptedUpdates,
+                    subscriptionResult);
         });
     }
 
