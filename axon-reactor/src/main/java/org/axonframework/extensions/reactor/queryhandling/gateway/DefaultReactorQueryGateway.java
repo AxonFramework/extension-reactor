@@ -10,6 +10,7 @@ import org.axonframework.messaging.responsetypes.ResponseType;
 import org.axonframework.messaging.responsetypes.ResponseTypes;
 import org.axonframework.queryhandling.DefaultSubscriptionQueryResult;
 import org.axonframework.queryhandling.GenericQueryMessage;
+import org.axonframework.queryhandling.GenericQueryResponseMessage;
 import org.axonframework.queryhandling.GenericSubscriptionQueryMessage;
 import org.axonframework.queryhandling.QueryBus;
 import org.axonframework.queryhandling.QueryMessage;
@@ -18,6 +19,7 @@ import org.axonframework.queryhandling.SubscriptionQueryBackpressure;
 import org.axonframework.queryhandling.SubscriptionQueryMessage;
 import org.axonframework.queryhandling.SubscriptionQueryResult;
 import org.axonframework.queryhandling.SubscriptionQueryUpdateMessage;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.context.ContextView;
@@ -28,6 +30,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import static java.util.Arrays.asList;
@@ -90,6 +93,28 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
             ReactorResultHandlerInterceptor<QueryMessage<?, ?>, ResultMessage<?>> interceptor) {
         resultInterceptors.add(interceptor);
         return () -> resultInterceptors.remove(interceptor);
+    }
+
+    /**
+     * This is a utility method to intercept and transform inner elements emitted on {@code streamingQuery} result flux.
+     * Using {@code registerResultHandlerInterceptor} will intercept {@code ResultMessage} which payload is reference to the flux,
+     * and transforming inner elements from flux is hard to achieve with a lot of boilerplate code.
+     * This method encapsulates this logic.
+     *
+     * @param interceptor The reactive interceptor to register (will be applied only to inner elements for streaming query result flux)
+     * @return a Registration, which may be used to unregister the interceptor
+     */
+    public <R> Registration registerStreamingQueryResultHandlerInterceptor(
+            BiFunction<QueryMessage<?, ?>, ? super Flux<R>, ? extends Publisher<R>> interceptor) {
+        return registerResultHandlerInterceptor((q, res) -> res.map(resultMessage -> {
+            if (resultMessage.getPayload() instanceof Flux) {
+                Flux<R> payload = (Flux<R>) resultMessage.getPayload();
+                payload = payload.transform(f -> interceptor.apply(q, f));
+                return GenericQueryResponseMessage.asResponseMessage(payload);
+            } else {
+                return resultMessage;
+            }
+        }));
     }
 
     @Override
