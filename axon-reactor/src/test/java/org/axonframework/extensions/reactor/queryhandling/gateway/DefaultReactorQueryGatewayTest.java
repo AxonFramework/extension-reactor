@@ -476,14 +476,14 @@ class DefaultReactorQueryGatewayTest {
 
     @Test
     void testStreamableQueryInterceptor() throws Exception {
-        reactiveQueryGateway.registerStreamingQueryResultHandlerInterceptor((q, res) -> res.map(it -> (Long) it * 2));
+        reactiveQueryGateway.registerStreamingQueryResultHandlerInterceptor((q, res) -> res.take(4).map(it -> (Long) it * 2));
 
         Flux<Long> result = reactiveQueryGateway.streamingQuery(1L, Long.class);
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         verifyNoMoreInteractions(queryMessageHandler3);
         StepVerifier.create(result)
-                .expectNext(2L, 4L, 6L, 8L, 10L, 12L, 14L, 16L, 18L, 20L)
+                .expectNext(2L, 4L, 6L, 8L)
                 .verifyComplete();
         verify(queryMessageHandler4).handle(any());
     }
