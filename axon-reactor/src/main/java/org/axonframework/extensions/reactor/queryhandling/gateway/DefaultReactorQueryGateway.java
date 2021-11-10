@@ -110,7 +110,8 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
             if (resultMessage.getPayload() instanceof Flux) {
                 Flux<R> payload = (Flux<R>) resultMessage.getPayload();
                 payload = payload.transform(f -> interceptor.apply(q, f));
-                return GenericQueryResponseMessage.asResponseMessage(payload);
+                return GenericQueryResponseMessage.asResponseMessage(payload)
+                        .andMetaData(resultMessage.getMetaData());
             } else {
                 return resultMessage;
             }
