@@ -105,11 +105,11 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
      * @param interceptor The reactive interceptor to register (will be applied only to inner elements for streaming query result flux)
      * @return a Registration, which may be used to unregister the interceptor
      */
-    public <R> Registration registerStreamingQueryResultHandlerInterceptor(
-            BiFunction<QueryMessage<?, ?>, ? super Flux<R>, ? extends Publisher<R>> interceptor) {
+    public Registration registerStreamingQueryResultHandlerInterceptor(
+            BiFunction<QueryMessage<?, ?>, ? super Flux<Object>, ? extends Publisher<Object>> interceptor) {
         return registerResultHandlerInterceptor((q, res) -> res.map(resultMessage -> {
             if (resultMessage.getPayload() instanceof Flux) {
-                Flux<R> payload = (Flux<R>) resultMessage.getPayload();
+                Flux<Object> payload = (Flux<Object>) resultMessage.getPayload();
                 payload = payload.transform(f -> interceptor.apply(q, f));
                 return GenericQueryResponseMessage.asResponseMessage(payload)
                         .andMetaData(resultMessage.getMetaData());

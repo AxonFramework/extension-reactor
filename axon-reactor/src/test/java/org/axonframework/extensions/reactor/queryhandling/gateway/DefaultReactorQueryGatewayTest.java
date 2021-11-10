@@ -476,7 +476,7 @@ class DefaultReactorQueryGatewayTest {
 
     @Test
     void testStreamableQueryInterceptor() throws Exception {
-        reactiveQueryGateway.<Long>registerStreamingQueryResultHandlerInterceptor((q, res) -> res.map(it -> it * 2));
+        reactiveQueryGateway.registerStreamingQueryResultHandlerInterceptor((q, res) -> res.map(it -> (Long) it * 2));
 
         Flux<Long> result = reactiveQueryGateway.streamingQuery(1L, Long.class);
         verifyNoMoreInteractions(queryMessageHandler1);
