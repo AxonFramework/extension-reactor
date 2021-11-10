@@ -7,7 +7,17 @@ import org.axonframework.extensions.reactor.messaging.ReactorResultHandlerInterc
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
 import org.axonframework.messaging.responsetypes.ResponseType;
-import org.axonframework.queryhandling.*;
+import org.axonframework.messaging.responsetypes.ResponseTypes;
+import org.axonframework.queryhandling.DefaultSubscriptionQueryResult;
+import org.axonframework.queryhandling.GenericQueryMessage;
+import org.axonframework.queryhandling.GenericSubscriptionQueryMessage;
+import org.axonframework.queryhandling.QueryBus;
+import org.axonframework.queryhandling.QueryMessage;
+import org.axonframework.queryhandling.QueryResponseMessage;
+import org.axonframework.queryhandling.SubscriptionQueryBackpressure;
+import org.axonframework.queryhandling.SubscriptionQueryMessage;
+import org.axonframework.queryhandling.SubscriptionQueryResult;
+import org.axonframework.queryhandling.SubscriptionQueryUpdateMessage;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.context.ContextView;
@@ -92,9 +102,14 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
                 .next();
     }
 
-
     public <R, Q> Mono<QueryMessage<?, ?>> createQueryMessage(String queryName, Q query, ResponseType<R> responseType) {
         return Mono.fromCallable(() -> new GenericQueryMessage<>(asMessage(query), queryName, responseType))
+                .transformDeferredContextual((queryMono, contextView) ->
+                        queryMono.map(q -> q.andMetaData(metaDataFromContext(contextView))));
+    }
+
+    public <R, Q> Mono<QueryMessage<?, ?>> createStreamableQueryMessage(String queryName, Q query, Class<R> responseType) {
+        return Mono.fromCallable(() -> new GenericQueryMessage<>(asMessage(query), queryName, ResponseTypes.fluxOf(responseType)))
                 .transformDeferredContextual((queryMono, contextView) ->
                         queryMono.map(q -> q.andMetaData(metaDataFromContext(contextView))));
     }
@@ -104,10 +119,20 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
     }
 
     @Override
+    public <R, Q> Flux<R> streamingQuery(String queryName, Q query, Class<R> responseType) {
+        return createStreamableQueryMessage(queryName, query, responseType)
+                .transform(this::processDispatchInterceptors)
+                .flatMap(this::dispatchQuery)
+                .flatMapMany(this::processResultsInterceptors)
+                .<Flux<R>>transform(this::getPayload)
+                .concatMap(Function.identity(), 0);
+    }
+
+    @Override
     public <R, Q> Flux<R> scatterGather(String queryName, Q query, ResponseType<R> responseType, Duration timeout) {
         return Mono.<QueryMessage<?, ?>>fromCallable(() -> new GenericQueryMessage<>(asMessage(query),
-                queryName,
-                responseType))
+                        queryName,
+                        responseType))
                 .transform(this::processDispatchInterceptors)
                 .flatMap(q -> dispatchScatterGatherQuery(q, timeout.toMillis(), TimeUnit.MILLISECONDS))
                 .flatMapMany(this::processResultsInterceptors)

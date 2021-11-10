@@ -5,7 +5,14 @@ import org.axonframework.messaging.MessageHandler;
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
 import org.axonframework.messaging.responsetypes.ResponseTypes;
-import org.axonframework.queryhandling.*;
+import org.axonframework.queryhandling.GenericQueryMessage;
+import org.axonframework.queryhandling.GenericQueryResponseMessage;
+import org.axonframework.queryhandling.GenericSubscriptionQueryMessage;
+import org.axonframework.queryhandling.QueryMessage;
+import org.axonframework.queryhandling.QueryUpdateEmitter;
+import org.axonframework.queryhandling.SimpleQueryBus;
+import org.axonframework.queryhandling.SubscriptionQueryMessage;
+import org.axonframework.queryhandling.SubscriptionQueryResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +46,7 @@ import static reactor.util.context.Context.of;
  * Tests for {@link DefaultReactorQueryGateway}.
  *
  * @author Milan Savic
+ * @author Stefan Dragisic
  */
 @ExtendWith(MockitoExtension.class)
 class DefaultReactorQueryGatewayTest {
@@ -48,6 +56,7 @@ class DefaultReactorQueryGatewayTest {
     private MessageHandler<QueryMessage<?, Object>> queryMessageHandler1;
     private MessageHandler<QueryMessage<?, Object>> queryMessageHandler2;
     private MessageHandler<QueryMessage<?, Object>> queryMessageHandler3;
+    private MessageHandler<QueryMessage<?, Flux<Long>>> queryMessageHandler4;
     private SimpleQueryBus queryBus;
 
     @BeforeEach
@@ -86,14 +95,22 @@ class DefaultReactorQueryGatewayTest {
             }
         });
 
+        queryMessageHandler4 = spy(new MessageHandler<QueryMessage<?, Flux<Long>>>() {
+            @Override
+            public Object handle(QueryMessage<?, Flux<Long>> message) {
+                return Flux.range(1, 10).map(Long::valueOf).delayElements(Duration.ofMillis(50));
+            }
+        });
+
         queryBus.subscribe(String.class.getName(), String.class, queryMessageHandler1);
         queryBus.subscribe(String.class.getName(), String.class, queryMessageHandler2);
         queryBus.subscribe(Integer.class.getName(), Integer.class, queryMessageHandler3);
+        queryBus.subscribe(Long.class.getName(), Long.class, queryMessageHandler4);
 
         queryBus.subscribe(Boolean.class.getName(),
-                           String.class,
-                           message -> "" + message.getMetaData().getOrDefault("key1", "")
-                                   + message.getMetaData().getOrDefault("key2", ""));
+                String.class,
+                message -> "" + message.getMetaData().getOrDefault("key1", "")
+                        + message.getMetaData().getOrDefault("key2", ""));
 
         queryBus.subscribe(Long.class.getName(), String.class, message -> null);
 
@@ -434,24 +451,55 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler2);
 
         StepVerifier.create(result)
-                    .expectNext("handled-modified",
-                                "handled-modified",
-                                "handled-modified",
-                                "handled-modified",
-                                "handled-modified")
-                    .verifyComplete();
+                .expectNext("handled-modified",
+                        "handled-modified",
+                        "handled-modified",
+                        "handled-modified",
+                        "handled-modified")
+                .verifyComplete();
 
         verify(queryMessageHandler1, times(2)).handle(any());
         verify(queryMessageHandler2, times(2)).handle(any());
     }
 
     @Test
+    void testStreamableQuery() throws Exception {
+        Flux<Long> result = reactiveQueryGateway.streamingQuery(1L, Long.class);
+        verifyNoMoreInteractions(queryMessageHandler1);
+        verifyNoMoreInteractions(queryMessageHandler2);
+        verifyNoMoreInteractions(queryMessageHandler3);
+        StepVerifier.create(result)
+                .expectNext(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L)
+                .verifyComplete();
+        verify(queryMessageHandler4).handle(any());
+    }
+
+    @Test
+    void testStreamableQueryInterceptor() throws Exception {
+        reactiveQueryGateway.registerResultHandlerInterceptor((q, res) -> res.map(it -> {
+            Flux<Long> payload = (Flux<Long>) it.getPayload();
+            payload.map(i -> i + 1);
+
+            return it;
+        }));
+
+        Flux<Long> result = reactiveQueryGateway.streamingQuery(1L, Long.class);
+        verifyNoMoreInteractions(queryMessageHandler1);
+        verifyNoMoreInteractions(queryMessageHandler2);
+        verifyNoMoreInteractions(queryMessageHandler3);
+        StepVerifier.create(result)
+                .expectNext(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L)
+                .verifyComplete();
+        verify(queryMessageHandler4).handle(any());
+    }
+
+    @Test
     void testQueryWithResultInterceptorModifyResultBasedOnQuery() throws Exception {
         reactiveQueryGateway.registerDispatchInterceptor(q -> q.map(it ->
-                                                                            it.andMetaData(Collections.singletonMap(
-                                                                                    "block",
-                                                                                    it.getPayload() instanceof Boolean)
-                                                                            )));
+                it.andMetaData(Collections.singletonMap(
+                        "block",
+                        it.getPayload() instanceof Boolean)
+                )));
         reactiveQueryGateway
                 .registerResultHandlerInterceptor((q, results) -> results
                         .filter(it -> !((boolean) q.getMetaData().get("block")))
