@@ -14,7 +14,7 @@ updates:
   reviewers:
     - "m1l4n54v1c"
     - "saratry"
-    - "stefanvozd"
+    - "schananas"
   milestone: 3
 - package-ecosystem: maven
   directory: "/"
