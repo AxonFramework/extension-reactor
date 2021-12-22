@@ -80,6 +80,21 @@ class DefaultReactorCommandGatewayTest {
     }
 
     @Test
+    void testBuilderResultFiltering() {
+        ReactorCommandGateway reactorCommandGateway = DefaultReactorCommandGateway.builder()
+                .commandBus(commandBus)
+                .resultHandlerInterceptors((message, results) -> results.filter(result -> result.getMetaData().containsKey("K")))
+                .build();
+        // int 1 -> flux of results is filtered
+
+        Mono<CommandResultMessage<?>> results = reactorCommandGateway.send("");
+        StepVerifier.create(results)
+                .verifyComplete();
+        // verify -> command has been sent
+        assertEquals(1, commandBus.numberOfSentCommands());
+    }
+
+    @Test
     void testCommandFiltering() {
         registerMessageFilter(gateway, result -> result.getMetaData().containsKey("K"));
         // int 1 -> flux of results is filtered
