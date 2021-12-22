@@ -258,7 +258,7 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
          */
         public Builder dispatchInterceptors(
                 List<ReactorMessageDispatchInterceptor<QueryMessage<?, ?>>> dispatchInterceptors) {
-            this.dispatchInterceptors = dispatchInterceptors != null && dispatchInterceptors.isEmpty()
+            this.dispatchInterceptors = dispatchInterceptors != null && !dispatchInterceptors.isEmpty()
                     ? new CopyOnWriteArrayList<>(dispatchInterceptors)
                     : new CopyOnWriteArrayList<>();
             return this;
