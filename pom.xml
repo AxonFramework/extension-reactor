@@ -19,7 +19,7 @@
 
     <groupId>org.axonframework.extensions.reactor</groupId>
     <artifactId>axon-reactor-parent</artifactId>
-    <version>4.5.1</version>
+    <version>4.5.2-SNAPSHOT</version>
     <modules>
         <module>axon-reactor</module>
         <module>axon-reactor-spring-boot-autoconfigure</module>
@@ -360,7 +360,7 @@
         <connection>scm:git:git://github.com/AxonFramework/extension-reactor.git</connection>
         <developerConnection>scm:git:git@github.com:AxonFramework/extension-reactor.git</developerConnection>
         <url>https://github.com/AxonFramework/extension-reactor</url>
-        <tag>axon-reactor-4.5.1</tag>
+        <tag>axon-reactor-4.5</tag>
     </scm>
 
     <developers>
