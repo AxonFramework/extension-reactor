@@ -48,7 +48,7 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <axon.version>4.5.6</axon.version>
+        <axon.version>4.5.7</axon.version>
         <projectreactor.version>3.4.12</projectreactor.version>
 
         <spring.version>5.3.13</spring.version>
@@ -222,7 +222,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-jar-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.2.1</version>
                 <configuration>
                     <archive>
                         <manifest>
