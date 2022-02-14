@@ -1,6 +1,7 @@
 package org.axonframework.extensions.reactor.queryhandling.gateway;
 
 import org.axonframework.common.Registration;
+import org.axonframework.messaging.GenericResultMessage;
 import org.axonframework.messaging.MessageHandler;
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
@@ -476,7 +477,11 @@ class DefaultReactorQueryGatewayTest {
 
     @Test
     void testStreamableQueryInterceptor() throws Exception {
-        reactiveQueryGateway.registerStreamingQueryResultHandlerInterceptor((q, res) -> res.take(4).map(it -> (Long) it * 2));
+        reactiveQueryGateway.registerResultHandlerInterceptor((q, res) -> res.take(4).map(resultMessage -> {
+            Long value = (Long) resultMessage.getPayload();
+            Long newValue = value * 2;
+            return new GenericResultMessage<Object>(newValue, resultMessage.getMetaData());
+        }));
 
         Flux<Long> result = reactiveQueryGateway.streamingQuery(1L, Long.class);
         verifyNoMoreInteractions(queryMessageHandler1);
