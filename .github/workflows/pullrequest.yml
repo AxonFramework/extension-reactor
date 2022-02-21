@@ -36,22 +36,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-maven
 
-      - name: Maven operation with Sonar
+      - name: Regular Build
+        if: ${{ !matrix.sonar-enabled }}
+        run: |
+          ./mvnw -B -U clean verify
+
+      - name: Build with Coverage reports
         if: matrix.sonar-enabled
         run: |
-          mvn -B -U -Pcoverage \
-          clean verify \
-          sonar:sonar \
+          ./mvnw -B -U -Possrh -Dcoverage clean verify
+
+      - name: Sonar Analysis
+        if: ${{ success() && matrix.sonar-enabled && github.event.pull_request.head.repo.full_name == github.repository }}
+        run: |
+          ./mvnw -B sonar:sonar \          
           -Dsonar.projectKey=AxonFramework_extension-reactor \
           -Dsonar.organization=axonframework \
           -Dsonar.host.url=https://sonarcloud.io \
           -Dsonar.login=${{ secrets.SONAR_TOKEN }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Maven operation without Sonar
-        if: matrix.sonar-enabled != true
-        run: |
-          mvn -B -U clean verify
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
