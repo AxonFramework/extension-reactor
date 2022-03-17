@@ -313,17 +313,16 @@ public interface ReactorQueryGateway extends ReactorMessageDispatchInterceptorSu
     }
 
     /**
-     * Sends given {@code query} over the {@link org.axonframework.queryhandling.QueryBus}, expecting a response
-     * as Flux of {@code responseType}. Query is sent once Flux is subscribed to.
-     * The Streaming query allows a client to stream large result sets.
+     * Sends the given {@code query} with {@code queryName} over the {@link org.axonframework.queryhandling.QueryBus}, 
+     * expecting a {@link Flux} response of {@code responseType}. The {@code query} is send once the
+     *  returned {@code Flux} is subscribed to. The streaming query allows a client to stream larger result sets if required.
      *
      * @param queryName    A {@link java.lang.String} describing the query to be executed
-     * @param query        The {@code query} to be sent
+     * @param query        The {@code query} to be send
      * @param responseType A {@link java.lang.Class} describing the desired response type
      * @param <R>          The response class contained in the given {@code responseType}
      * @param <Q>          The query class
-     * @return A {@link reactor.core.publisher.Flux} streaming the results as dictated by the given
-     * {@code responseType}
+     * @return A {@link Flux} streaming the results as dictated by the given {@code responseType}
      */
     <R, Q> Flux<R> streamingQuery(String queryName, Q query, Class<R> responseType);
 
