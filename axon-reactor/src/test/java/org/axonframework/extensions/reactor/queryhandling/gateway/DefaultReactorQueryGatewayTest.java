@@ -116,8 +116,8 @@ class DefaultReactorQueryGatewayTest {
         queryBus.subscribe(Long.class.getName(), String.class, message -> null);
 
         queryBus.subscribe(Double.class.getName(),
-                           methodOf(this.getClass(), "stringListQueryHandler").getGenericReturnType(),
-                           message -> Arrays.asList("value1", "value2", "value3"));
+                methodOf(this.getClass(), "stringListQueryHandler").getGenericReturnType(),
+                message -> Arrays.asList("value1", "value2", "value3"));
 
         reactiveQueryGateway = DefaultReactorQueryGateway.builder()
                                                          .queryBus(queryBus)
@@ -293,8 +293,8 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         StepVerifier.create(result)
-                    .expectNext("handled-modified")
-                    .verifyComplete();
+                .expectNext("handled-modified")
+                .verifyComplete();
         verify(queryMessageHandler1).handle(any());
     }
 
@@ -517,8 +517,8 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler2);
 
         StepVerifier.create(result)
-                    .expectNext("handled", "handled", "handled", "handled")
-                    .verifyComplete();
+                .expectNext("handled", "handled", "handled", "handled")
+                .verifyComplete();
 
         verify(queryMessageHandler1, times(2)).handle(any());
         verify(queryMessageHandler2, times(2)).handle(any());
