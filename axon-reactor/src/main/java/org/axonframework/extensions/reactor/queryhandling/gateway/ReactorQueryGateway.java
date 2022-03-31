@@ -19,6 +19,8 @@ import reactor.util.concurrent.Queues;
 import java.time.Duration;
 import java.util.function.Function;
 
+import static org.axonframework.queryhandling.QueryMessage.queryName;
+
 /**
  * Variation of the {@link QueryGateway}, wrapping a {@link QueryBus} for a friendlier API. Provides support for reactive return types such as {@link Mono} and {@link Flux}
  * from Project Reactor.
@@ -294,6 +296,35 @@ public interface ReactorQueryGateway extends ReactorMessageDispatchInterceptorSu
     default <Q, R> Flux<R> queryUpdates(Q query, Class<R> resultType) {
         return queryUpdates(query, ResponseTypes.instanceOf(resultType));
     }
+
+    /**
+     * Sends the given {@code query} over the {@link org.axonframework.queryhandling.QueryBus}, expecting a {@link Flux} response
+     * of {@code responseType}. The {@code query} is send once the returned {@code Flux} is subscribed to.
+     * The streaming query allows a client to stream larger result sets if required.
+     *
+     * @param query        The {@code query} to be send
+     * @param responseType A {@link java.lang.Class} describing the desired response type
+     * @param <R>          The response class contained in the given {@code responseType}
+     * @param <Q>          The query class
+     * @return A {@link Flux} streaming the results as dictated by the given {@code responseType}
+     */
+    default <R, Q> Flux<R> streamingQuery(Q query, Class<R> responseType) {
+        return streamingQuery(queryName(query), query, responseType);
+    }
+
+    /**
+     * Sends the given {@code query} with {@code queryName} over the {@link org.axonframework.queryhandling.QueryBus}, 
+     * expecting a {@link Flux} response of {@code responseType}. The {@code query} is send once the
+     *  returned {@code Flux} is subscribed to. The streaming query allows a client to stream larger result sets if required.
+     *
+     * @param queryName    A {@link java.lang.String} describing the query to be executed
+     * @param query        The {@code query} to be send
+     * @param responseType A {@link java.lang.Class} describing the desired response type
+     * @param <R>          The response class contained in the given {@code responseType}
+     * @param <Q>          The query class
+     * @return A {@link Flux} streaming the results as dictated by the given {@code responseType}
+     */
+    <R, Q> Flux<R> streamingQuery(String queryName, Q query, Class<R> responseType);
 
     /**
      * Sends the given {@code query} over the {@link QueryBus} and returns result containing initial response and

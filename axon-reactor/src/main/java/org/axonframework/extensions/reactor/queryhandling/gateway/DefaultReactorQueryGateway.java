@@ -7,7 +7,18 @@ import org.axonframework.extensions.reactor.messaging.ReactorResultHandlerInterc
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
 import org.axonframework.messaging.responsetypes.ResponseType;
-import org.axonframework.queryhandling.*;
+import org.axonframework.queryhandling.DefaultSubscriptionQueryResult;
+import org.axonframework.queryhandling.GenericQueryMessage;
+import org.axonframework.queryhandling.GenericStreamingQueryMessage;
+import org.axonframework.queryhandling.GenericSubscriptionQueryMessage;
+import org.axonframework.queryhandling.QueryBus;
+import org.axonframework.queryhandling.QueryMessage;
+import org.axonframework.queryhandling.QueryResponseMessage;
+import org.axonframework.queryhandling.StreamingQueryMessage;
+import org.axonframework.queryhandling.SubscriptionQueryBackpressure;
+import org.axonframework.queryhandling.SubscriptionQueryMessage;
+import org.axonframework.queryhandling.SubscriptionQueryResult;
+import org.axonframework.queryhandling.SubscriptionQueryUpdateMessage;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.util.context.ContextView;
@@ -28,6 +39,7 @@ import static org.axonframework.messaging.GenericMessage.asMessage;
  * Implementation of the {@link ReactorQueryGateway} that uses Project Reactor to achieve reactiveness.
  *
  * @author Milan Savic
+ * @author Stefan Dragisic
  * @since 4.4.2
  */
 public class DefaultReactorQueryGateway implements ReactorQueryGateway {
@@ -92,9 +104,14 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
                 .next();
     }
 
-
     public <R, Q> Mono<QueryMessage<?, ?>> createQueryMessage(String queryName, Q query, ResponseType<R> responseType) {
         return Mono.fromCallable(() -> new GenericQueryMessage<>(asMessage(query), queryName, responseType))
+                .transformDeferredContextual((queryMono, contextView) ->
+                        queryMono.map(q -> q.andMetaData(metaDataFromContext(contextView))));
+    }
+
+    public <R, Q> Mono<QueryMessage<?, ?>> createStreamableQueryMessage(String queryName, Q query, Class<R> responseType) {
+        return Mono.fromCallable(() -> new GenericStreamingQueryMessage<>(asMessage(query), queryName, responseType))
                 .transformDeferredContextual((queryMono, contextView) ->
                         queryMono.map(q -> q.andMetaData(metaDataFromContext(contextView))));
     }
@@ -104,10 +121,20 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
     }
 
     @Override
+    public <R, Q> Flux<R> streamingQuery(String queryName, Q query, Class<R> responseType) {
+        return createStreamableQueryMessage(queryName, query, responseType)
+                .transform(this::processDispatchInterceptors)
+                .cast(StreamingQueryMessage.class)
+                .flatMap(this::dispatchStreamingQuery)
+                .flatMapMany(this::processResultsInterceptors)
+                .transform(this::getPayload);
+    }
+
+    @Override
     public <R, Q> Flux<R> scatterGather(String queryName, Q query, ResponseType<R> responseType, Duration timeout) {
         return Mono.<QueryMessage<?, ?>>fromCallable(() -> new GenericQueryMessage<>(asMessage(query),
-                queryName,
-                responseType))
+                        queryName,
+                        responseType))
                 .transform(this::processDispatchInterceptors)
                 .flatMap(q -> dispatchScatterGatherQuery(q, timeout.toMillis(), TimeUnit.MILLISECONDS))
                 .flatMapMany(this::processResultsInterceptors)
@@ -135,6 +162,13 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
     private Mono<Tuple2<QueryMessage<?, ?>, Flux<ResultMessage<?>>>> dispatchQuery(QueryMessage<?, ?> queryMessage) {
         Flux<ResultMessage<?>> results = Flux
                 .defer(() -> Mono.fromFuture(queryBus.query(queryMessage)));
+
+        return Mono.<QueryMessage<?, ?>>just(queryMessage)
+                .zipWith(Mono.just(results));
+    }
+
+    private Mono<Tuple2<QueryMessage<?, ?>, Flux<ResultMessage<?>>>> dispatchStreamingQuery(StreamingQueryMessage<?, ?> queryMessage) {
+        Flux<ResultMessage<?>> results = Flux.from(queryBus.streamingQuery(queryMessage));
 
         return Mono.<QueryMessage<?, ?>>just(queryMessage)
                 .zipWith(Mono.just(results));

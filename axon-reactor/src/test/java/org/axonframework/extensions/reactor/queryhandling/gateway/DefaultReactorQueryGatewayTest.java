@@ -1,11 +1,19 @@
 package org.axonframework.extensions.reactor.queryhandling.gateway;
 
 import org.axonframework.common.Registration;
+import org.axonframework.messaging.GenericResultMessage;
 import org.axonframework.messaging.MessageHandler;
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
 import org.axonframework.messaging.responsetypes.ResponseTypes;
-import org.axonframework.queryhandling.*;
+import org.axonframework.queryhandling.GenericQueryMessage;
+import org.axonframework.queryhandling.GenericQueryResponseMessage;
+import org.axonframework.queryhandling.GenericSubscriptionQueryMessage;
+import org.axonframework.queryhandling.QueryMessage;
+import org.axonframework.queryhandling.QueryUpdateEmitter;
+import org.axonframework.queryhandling.SimpleQueryBus;
+import org.axonframework.queryhandling.SubscriptionQueryMessage;
+import org.axonframework.queryhandling.SubscriptionQueryResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -39,6 +47,7 @@ import static reactor.util.context.Context.of;
  * Tests for {@link DefaultReactorQueryGateway}.
  *
  * @author Milan Savic
+ * @author Stefan Dragisic
  */
 @ExtendWith(MockitoExtension.class)
 class DefaultReactorQueryGatewayTest {
@@ -48,6 +57,7 @@ class DefaultReactorQueryGatewayTest {
     private MessageHandler<QueryMessage<?, Object>> queryMessageHandler1;
     private MessageHandler<QueryMessage<?, Object>> queryMessageHandler2;
     private MessageHandler<QueryMessage<?, Object>> queryMessageHandler3;
+    private MessageHandler<QueryMessage<?, Flux<Long>>> queryMessageHandler4;
     private SimpleQueryBus queryBus;
 
     @BeforeEach
@@ -86,24 +96,32 @@ class DefaultReactorQueryGatewayTest {
             }
         });
 
+        queryMessageHandler4 = spy(new MessageHandler<QueryMessage<?, Flux<Long>>>() {
+            @Override
+            public Object handle(QueryMessage<?, Flux<Long>> message) {
+                return Flux.range(1, 10).map(Long::valueOf).delayElements(Duration.ofMillis(50));
+            }
+        });
+
         queryBus.subscribe(String.class.getName(), String.class, queryMessageHandler1);
         queryBus.subscribe(String.class.getName(), String.class, queryMessageHandler2);
         queryBus.subscribe(Integer.class.getName(), Integer.class, queryMessageHandler3);
+        queryBus.subscribe(Long.class.getName(), Long.class, queryMessageHandler4);
 
         queryBus.subscribe(Boolean.class.getName(),
-                           String.class,
-                           message -> "" + message.getMetaData().getOrDefault("key1", "")
-                                   + message.getMetaData().getOrDefault("key2", ""));
+                String.class,
+                message -> "" + message.getMetaData().getOrDefault("key1", "")
+                        + message.getMetaData().getOrDefault("key2", ""));
 
         queryBus.subscribe(Long.class.getName(), String.class, message -> null);
 
         queryBus.subscribe(Double.class.getName(),
-                           methodOf(this.getClass(), "stringListQueryHandler").getGenericReturnType(),
-                           message -> Arrays.asList("value1", "value2", "value3"));
+                methodOf(this.getClass(), "stringListQueryHandler").getGenericReturnType(),
+                message -> Arrays.asList("value1", "value2", "value3"));
 
         reactiveQueryGateway = DefaultReactorQueryGateway.builder()
-                                                         .queryBus(queryBus)
-                                                         .build();
+                .queryBus(queryBus)
+                .build();
     }
 
     @SuppressWarnings("unused") // Used by 'testSubscriptionQueryMany()' to generate query handler response type
@@ -118,14 +136,14 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         StepVerifier.create(result)
-                    .expectNext("handled")
-                    .verifyComplete();
+                .expectNext("handled")
+                .verifyComplete();
         verify(queryMessageHandler1).handle(any());
     }
 
     @Test
     void testQueryWithContext() throws Exception {
-        Context context = of(MetaData.class, MetaData.with("k","v"));
+        Context context = of(MetaData.class, MetaData.with("k", "v"));
 
         Mono<String> result = reactiveQueryGateway.query("criteria", String.class)
                 .subscriberContext(context);
@@ -133,14 +151,14 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         StepVerifier.create(result)
-                    .expectNext("handled")
-                    .expectAccessibleContext()
-                    .containsOnly(context)
-                    .then()
-                    .verifyComplete();
+                .expectNext("handled")
+                .expectAccessibleContext()
+                .containsOnly(context)
+                .then()
+                .verifyComplete();
         verify(queryMessageHandler1).handle(any());
 
-        ArgumentCaptor<QueryMessage> queryMessageCaptor =  ArgumentCaptor.forClass(QueryMessage.class);
+        ArgumentCaptor<QueryMessage> queryMessageCaptor = ArgumentCaptor.forClass(QueryMessage.class);
 
 
         verify(queryBus).query(queryMessageCaptor.capture());
@@ -183,8 +201,8 @@ class DefaultReactorQueryGatewayTest {
 
         List<Throwable> exceptions = new ArrayList<>(2);
         StepVerifier.create(result.onErrorContinue((t, o) -> exceptions.add(t)))
-                    .expectNext("handled", "handled", "")
-                    .verifyComplete();
+                .expectNext("handled", "handled", "")
+                .verifyComplete();
 
         assertEquals(2, exceptions.size());
         assertTrue(exceptions.get(0) instanceof RuntimeException);
@@ -197,15 +215,15 @@ class DefaultReactorQueryGatewayTest {
         int numberOfQueries = 10_000;
         Flux<QueryMessage<?, ?>> queries = Flux
                 .fromStream(IntStream.range(0, numberOfQueries)
-                                     .mapToObj(i -> new GenericQueryMessage<>("backpressure",
-                                                                              ResponseTypes.instanceOf(String.class))));
+                        .mapToObj(i -> new GenericQueryMessage<>("backpressure",
+                                ResponseTypes.instanceOf(String.class))));
         List<Integer> expectedResults = IntStream.range(1, numberOfQueries + 1)
-                                                 .boxed()
-                                                 .collect(Collectors.toList());
+                .boxed()
+                .collect(Collectors.toList());
         Flux<Object> result = reactiveQueryGateway.query(queries);
         StepVerifier.create(result)
-                    .expectNext(expectedResults.toArray(new Integer[0]))
-                    .verifyComplete();
+                .expectNext(expectedResults.toArray(new Integer[0]))
+                .verifyComplete();
         verify(queryMessageHandler1, times(numberOfQueries)).handle(any());
     }
 
@@ -213,8 +231,8 @@ class DefaultReactorQueryGatewayTest {
     void testQueryReturningNull() {
         assertNull(reactiveQueryGateway.query(0L, String.class).block());
         StepVerifier.create(reactiveQueryGateway.query(0L, String.class))
-                    .expectComplete()
-                    .verify();
+                .expectComplete()
+                .verify();
     }
 
     @Test
@@ -227,14 +245,14 @@ class DefaultReactorQueryGatewayTest {
                         .map(query -> query.andMetaData(Collections.singletonMap("key2", "value2"))));
 
         StepVerifier.create(reactiveQueryGateway.query(true, String.class))
-                    .expectNext("value1value2")
-                    .verifyComplete();
+                .expectNext("value1value2")
+                .verifyComplete();
 
         registration2.cancel();
 
         StepVerifier.create(reactiveQueryGateway.query(true, String.class))
-                    .expectNext("value1")
-                    .verifyComplete();
+                .expectNext("value1")
+                .verifyComplete();
     }
 
     @Test
@@ -252,7 +270,7 @@ class DefaultReactorQueryGatewayTest {
     @Test
     void testQueryWithErrorDispatchInterceptor() {
         reactiveQueryGateway
-                .registerResultHandlerInterceptor((q,r) -> r.onErrorMap(t-> new MockException()));
+                .registerResultHandlerInterceptor((q, r) -> r.onErrorMap(t -> new MockException()));
 
 
         StepVerifier.create(reactiveQueryGateway.query(5, Integer.class)) //throws Runtime exception by default
@@ -266,16 +284,16 @@ class DefaultReactorQueryGatewayTest {
         reactiveQueryGateway
                 .registerDispatchInterceptor(queryMono -> queryMono
                         .filterWhen(v -> Mono.subscriberContext()
-                                             .filter(ctx -> ctx.hasKey("security"))
-                                             .map(ctx -> ctx.get("security")))
+                                .filter(ctx -> ctx.hasKey("security"))
+                                .map(ctx -> ctx.get("security")))
                         .map(query -> query.andMetaData(Collections.singletonMap("key1", "value1"))));
 
         StepVerifier.create(reactiveQueryGateway.query(true, String.class).subscriberContext(context))
-                    .expectNext("value1")
-                    .expectAccessibleContext()
-                    .containsOnly(context)
-                    .then()
-                    .verifyComplete();
+                .expectNext("value1")
+                .expectAccessibleContext()
+                .containsOnly(context)
+                .then()
+                .verifyComplete();
     }
 
     @Test
@@ -287,8 +305,8 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         StepVerifier.create(result)
-                    .expectNext("handled-modified")
-                    .verifyComplete();
+                .expectNext("handled-modified")
+                .verifyComplete();
         verify(queryMessageHandler1).handle(any());
     }
 
@@ -301,8 +319,8 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         StepVerifier.create(result)
-                    .expectComplete()
-                    .verify();
+                .expectComplete()
+                .verify();
         verify(queryMessageHandler1).handle(any());
     }
 
@@ -313,7 +331,7 @@ class DefaultReactorQueryGatewayTest {
                     throw new RuntimeException();
                 });
         StepVerifier.create(reactiveQueryGateway.query(true, String.class))
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
     }
 
     @Test
@@ -321,13 +339,13 @@ class DefaultReactorQueryGatewayTest {
         reactiveQueryGateway
                 .registerDispatchInterceptor(queryMono -> Mono.error(new RuntimeException()));
         StepVerifier.create(reactiveQueryGateway.query(true, String.class))
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
     }
 
     @Test
     void testQueryFails() {
         StepVerifier.create(reactiveQueryGateway.query(5, Integer.class))
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
     }
 
     @Test
@@ -336,7 +354,7 @@ class DefaultReactorQueryGatewayTest {
         Mono<Integer> query = reactiveQueryGateway.query(5, Integer.class).retry(5);
 
         StepVerifier.create(query)
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
 
         verify(queryMessageHandler3, times(6)).handle(any());
     }
@@ -345,13 +363,13 @@ class DefaultReactorQueryGatewayTest {
     @Test
     void testScatterGather() throws Exception {
         Flux<String> result = reactiveQueryGateway.scatterGather("criteria",
-                                                                 ResponseTypes.instanceOf(String.class),
-                                                                 Duration.ofSeconds(1));
+                ResponseTypes.instanceOf(String.class),
+                Duration.ofSeconds(1));
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         StepVerifier.create(result)
-                    .expectNext("handled", "handled")
-                    .verifyComplete();
+                .expectNext("handled", "handled")
+                .verifyComplete();
         verify(queryMessageHandler1).handle(any());
         verify(queryMessageHandler2).handle(any());
     }
@@ -370,8 +388,8 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler2);
 
         StepVerifier.create(result)
-                    .expectNext("handled", "handled", "handled", "handled", "")
-                    .verifyComplete();
+                .expectNext("handled", "handled", "handled", "handled", "")
+                .verifyComplete();
 
         verify(queryMessageHandler1, times(2)).handle(any());
         verify(queryMessageHandler2, times(2)).handle(any());
@@ -382,15 +400,15 @@ class DefaultReactorQueryGatewayTest {
         int numberOfQueries = 10_000;
         Flux<QueryMessage<?, ?>> queries = Flux
                 .fromStream(IntStream.range(0, numberOfQueries)
-                                     .mapToObj(i -> new GenericQueryMessage<>("backpressure",
-                                                                              ResponseTypes.instanceOf(String.class))));
+                        .mapToObj(i -> new GenericQueryMessage<>("backpressure",
+                                ResponseTypes.instanceOf(String.class))));
         List<Integer> expectedResults = IntStream.range(1, 2 * numberOfQueries + 1)
-                                                 .boxed()
-                                                 .collect(Collectors.toList());
+                .boxed()
+                .collect(Collectors.toList());
         Flux<Object> result = reactiveQueryGateway.scatterGather(queries, Duration.ofSeconds(1));
         StepVerifier.create(result)
-                    .expectNext(expectedResults.toArray(new Integer[0]))
-                    .verifyComplete();
+                .expectNext(expectedResults.toArray(new Integer[0]))
+                .verifyComplete();
         verify(queryMessageHandler1, times(numberOfQueries)).handle(any());
         verify(queryMessageHandler2, times(numberOfQueries)).handle(any());
     }
@@ -398,11 +416,11 @@ class DefaultReactorQueryGatewayTest {
     @Test
     void testScatterGatherReturningNull() {
         assertNull(reactiveQueryGateway.scatterGather(0L, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1))
-                                       .blockFirst());
+                .blockFirst());
         StepVerifier.create(reactiveQueryGateway
-                                    .scatterGather(0L, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
-                    .expectNext()
-                    .verifyComplete();
+                        .scatterGather(0L, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
+                .expectNext()
+                .verifyComplete();
     }
 
     @Test
@@ -415,15 +433,15 @@ class DefaultReactorQueryGatewayTest {
                         .map(query -> query.andMetaData(Collections.singletonMap("key2", "value2"))));
 
         StepVerifier.create(reactiveQueryGateway
-                                    .scatterGather(true, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
-                    .expectNext("value1value2")
-                    .verifyComplete();
+                        .scatterGather(true, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
+                .expectNext("value1value2")
+                .verifyComplete();
 
         registration2.cancel();
 
         StepVerifier.create(reactiveQueryGateway.query(true, String.class))
-                    .expectNext("value1")
-                    .verifyComplete();
+                .expectNext("value1")
+                .verifyComplete();
     }
 
     @Test
@@ -446,24 +464,54 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler2);
 
         StepVerifier.create(result)
-                    .expectNext("handled-modified",
-                                "handled-modified",
-                                "handled-modified",
-                                "handled-modified",
-                                "handled-modified")
-                    .verifyComplete();
+                .expectNext("handled-modified",
+                        "handled-modified",
+                        "handled-modified",
+                        "handled-modified",
+                        "handled-modified")
+                .verifyComplete();
 
         verify(queryMessageHandler1, times(2)).handle(any());
         verify(queryMessageHandler2, times(2)).handle(any());
     }
 
     @Test
+    void testStreamableQuery() throws Exception {
+        Flux<Long> result = reactiveQueryGateway.streamingQuery(1L, Long.class);
+        verifyNoMoreInteractions(queryMessageHandler1);
+        verifyNoMoreInteractions(queryMessageHandler2);
+        verifyNoMoreInteractions(queryMessageHandler3);
+        StepVerifier.create(result)
+                .expectNext(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L)
+                .verifyComplete();
+        verify(queryMessageHandler4).handle(any());
+    }
+
+    @Test
+    void testStreamableQueryInterceptor() throws Exception {
+        reactiveQueryGateway.registerResultHandlerInterceptor((q, res) -> res.take(4).map(resultMessage -> {
+            Long value = (Long) resultMessage.getPayload();
+            Long newValue = value * 2;
+            return new GenericResultMessage<Object>(newValue, resultMessage.getMetaData());
+        }));
+
+        Flux<Long> result = reactiveQueryGateway.streamingQuery(1L, Long.class);
+        verifyNoMoreInteractions(queryMessageHandler1);
+        verifyNoMoreInteractions(queryMessageHandler2);
+        verifyNoMoreInteractions(queryMessageHandler3);
+        StepVerifier.create(result)
+                .expectNext(2L, 4L, 6L, 8L)
+                .verifyComplete();
+        verify(queryMessageHandler4).handle(any());
+    }
+
+    @Test
     void testQueryWithResultInterceptorModifyResultBasedOnQuery() throws Exception {
         reactiveQueryGateway.registerDispatchInterceptor(q -> q.map(it ->
-                                                                            it.andMetaData(Collections.singletonMap(
-                                                                                    "block",
-                                                                                    it.getPayload() instanceof Boolean)
-                                                                            )));
+                it.andMetaData(Collections.singletonMap(
+                        "block",
+                        it.getPayload() instanceof Boolean)
+                )));
         reactiveQueryGateway
                 .registerResultHandlerInterceptor((q, results) -> results
                         .filter(it -> !((boolean) q.getMetaData().get("block")))
@@ -481,8 +529,8 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler2);
 
         StepVerifier.create(result)
-                    .expectNext("handled", "handled", "handled", "handled")
-                    .verifyComplete();
+                .expectNext("handled", "handled", "handled", "handled")
+                .verifyComplete();
 
         verify(queryMessageHandler1, times(2)).handle(any());
         verify(queryMessageHandler2, times(2)).handle(any());
@@ -513,9 +561,9 @@ class DefaultReactorQueryGatewayTest {
         verifyNoMoreInteractions(queryMessageHandler2);
 
         StepVerifier.create(result)
-                    .expectNext("handled", "handled", "handled", "handled")
-                    .expectError(RuntimeException.class)
-                    .verify();
+                .expectNext("handled", "handled", "handled", "handled")
+                .expectError(RuntimeException.class)
+                .verify();
 
         verify(queryMessageHandler1, times(2)).handle(any());
         verify(queryMessageHandler2, times(2)).handle(any());
@@ -528,8 +576,8 @@ class DefaultReactorQueryGatewayTest {
                     throw new RuntimeException();
                 });
         StepVerifier.create(reactiveQueryGateway
-                                    .scatterGather(true, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
-                    .verifyError(RuntimeException.class);
+                        .scatterGather(true, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
+                .verifyError(RuntimeException.class);
     }
 
     @Test
@@ -537,17 +585,17 @@ class DefaultReactorQueryGatewayTest {
         reactiveQueryGateway
                 .registerDispatchInterceptor(queryMono -> Mono.error(new RuntimeException()));
         StepVerifier.create(reactiveQueryGateway
-                                    .scatterGather(true, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
-                    .verifyError(RuntimeException.class);
+                        .scatterGather(true, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
+                .verifyError(RuntimeException.class);
     }
 
     @Test
     void testScatterGatherFails() {
         StepVerifier.create(reactiveQueryGateway.scatterGather(6,
-                                                               ResponseTypes.instanceOf(Integer.class),
-                                                               Duration.ofSeconds(1)))
-                    .expectNextCount(0)
-                    .verifyComplete();
+                        ResponseTypes.instanceOf(Integer.class),
+                        Duration.ofSeconds(1)))
+                .expectNextCount(0)
+                .verifyComplete();
     }
 
     @Test
@@ -555,11 +603,11 @@ class DefaultReactorQueryGatewayTest {
         doThrow(new RuntimeException(":(")).when(queryBus).scatterGather(any(), anyLong(), any());
 
         Flux<Integer> query = reactiveQueryGateway.scatterGather(6,
-                                                                 ResponseTypes.instanceOf(Integer.class),
-                                                                 Duration.ofSeconds(1)).retry(5);
+                ResponseTypes.instanceOf(Integer.class),
+                Duration.ofSeconds(1)).retry(5);
 
         StepVerifier.create(query)
-                    .verifyError();
+                .verifyError();
 
 
         verify(queryBus, times(6)).scatterGather(any(), anyLong(), any());
@@ -569,23 +617,23 @@ class DefaultReactorQueryGatewayTest {
     @Test
     void testSubscriptionQuery() throws Exception {
         Mono<SubscriptionQueryResult<String, String>> monoResult = reactiveQueryGateway.subscriptionQuery("criteria",
-                                                                                                          String.class,
-                                                                                                          String.class);
+                String.class,
+                String.class);
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
 
         SubscriptionQueryResult<String, String> result = monoResult.block();
         assertNotNull(result);
         StepVerifier.create(result.initialResult())
-                    .expectNext("handled")
-                    .verifyComplete();
+                .expectNext("handled")
+                .verifyComplete();
         StepVerifier.create(result.updates()
-                                  .doOnSubscribe(s -> {
-                                      queryUpdateEmitter.emit(String.class, q -> true, "update");
-                                      queryUpdateEmitter.complete(String.class, q -> true);
-                                  }))
-                    .expectNext("update")
-                    .verifyComplete();
+                        .doOnSubscribe(s -> {
+                            queryUpdateEmitter.emit(String.class, q -> true, "update");
+                            queryUpdateEmitter.complete(String.class, q -> true);
+                        }))
+                .expectNext("update")
+                .verifyComplete();
         verify(queryMessageHandler1).handle(any());
     }
 
@@ -593,11 +641,11 @@ class DefaultReactorQueryGatewayTest {
     void testMultipleSubscriptionQueries() throws Exception {
         Flux<SubscriptionQueryMessage<?, ?, ?>> queries = Flux.fromIterable(Arrays.asList(
                 new GenericSubscriptionQueryMessage<>("query1",
-                                                      ResponseTypes.instanceOf(String.class),
-                                                      ResponseTypes.instanceOf(String.class)),
+                        ResponseTypes.instanceOf(String.class),
+                        ResponseTypes.instanceOf(String.class)),
                 new GenericSubscriptionQueryMessage<>(4,
-                                                      ResponseTypes.instanceOf(Integer.class),
-                                                      ResponseTypes.instanceOf(String.class))));
+                        ResponseTypes.instanceOf(Integer.class),
+                        ResponseTypes.instanceOf(String.class))));
 
         Flux<SubscriptionQueryResult<?, ?>> result = reactiveQueryGateway.subscriptionQuery(queries);
         verifyNoMoreInteractions(queryMessageHandler1);
@@ -607,10 +655,10 @@ class DefaultReactorQueryGatewayTest {
         result.subscribe(sqr -> initialResults.add((Mono<Object>) sqr.initialResult()));
         assertEquals(2, initialResults.size());
         StepVerifier.create(initialResults.get(0))
-                    .expectNext("handled")
-                    .verifyComplete();
+                .expectNext("handled")
+                .verifyComplete();
         StepVerifier.create(initialResults.get(1))
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
 
         verify(queryMessageHandler1).handle(any());
     }
@@ -620,14 +668,14 @@ class DefaultReactorQueryGatewayTest {
         int numberOfQueries = 10_000;
         Flux<SubscriptionQueryMessage<?, ?, ?>> queries = Flux
                 .fromStream(IntStream.range(0, numberOfQueries)
-                                     .mapToObj(i -> new GenericSubscriptionQueryMessage<>("backpressure",
-                                                                                          ResponseTypes
-                                                                                                  .instanceOf(String.class),
-                                                                                          ResponseTypes
-                                                                                                  .instanceOf(String.class))));
+                        .mapToObj(i -> new GenericSubscriptionQueryMessage<>("backpressure",
+                                ResponseTypes
+                                        .instanceOf(String.class),
+                                ResponseTypes
+                                        .instanceOf(String.class))));
         List<Integer> expectedResults = IntStream.range(1, numberOfQueries + 1)
-                                                 .boxed()
-                                                 .collect(Collectors.toList());
+                .boxed()
+                .collect(Collectors.toList());
         Flux<SubscriptionQueryResult<?, ?>> result = reactiveQueryGateway.subscriptionQuery(queries);
         List<Mono<Object>> initialResults = new ArrayList<>(numberOfQueries);
         //noinspection unchecked
@@ -635,8 +683,8 @@ class DefaultReactorQueryGatewayTest {
         assertEquals(numberOfQueries, initialResults.size());
         for (int i = 0; i < numberOfQueries; i++) {
             StepVerifier.create(initialResults.get(i))
-                        .expectNext(expectedResults.get(i))
-                        .verifyComplete();
+                    .expectNext(expectedResults.get(i))
+                    .verifyComplete();
         }
 
         verify(queryMessageHandler1, times(numberOfQueries)).handle(any());
@@ -645,21 +693,21 @@ class DefaultReactorQueryGatewayTest {
     @Test
     void testSubscriptionQueryReturningNull() {
         SubscriptionQueryResult<String, String> result = reactiveQueryGateway.subscriptionQuery(0L,
-                                                                                                String.class,
-                                                                                                String.class)
-                                                                             .block();
+                        String.class,
+                        String.class)
+                .block();
         assertNotNull(result);
         assertNull(result.initialResult().block());
         StepVerifier.create(result.initialResult())
-                    .expectNext()
-                    .verifyComplete();
+                .expectNext()
+                .verifyComplete();
         StepVerifier.create(result.updates()
-                                  .doOnSubscribe(s -> {
-                                      queryUpdateEmitter.emit(Long.class, q -> true, (String) null);
-                                      queryUpdateEmitter.complete(Long.class, q -> true);
-                                  }))
-                    .expectNext()
-                    .verifyComplete();
+                        .doOnSubscribe(s -> {
+                            queryUpdateEmitter.emit(Long.class, q -> true, (String) null);
+                            queryUpdateEmitter.complete(Long.class, q -> true);
+                        }))
+                .expectNext()
+                .verifyComplete();
     }
 
     @Test
@@ -676,8 +724,8 @@ class DefaultReactorQueryGatewayTest {
         SubscriptionQueryResult<String, String> result = monoResult.block();
         assertNotNull(result);
         StepVerifier.create(result.initialResult())
-                    .expectNext("value1value2")
-                    .verifyComplete();
+                .expectNext("value1value2")
+                .verifyComplete();
 
         registration2.cancel();
 
@@ -685,8 +733,8 @@ class DefaultReactorQueryGatewayTest {
         result = monoResult.block();
         assertNotNull(result);
         StepVerifier.create(result.initialResult())
-                    .expectNext("value1")
-                    .verifyComplete();
+                .expectNext("value1")
+                .verifyComplete();
     }
 
     @Test
@@ -696,7 +744,7 @@ class DefaultReactorQueryGatewayTest {
                     throw new RuntimeException();
                 });
         StepVerifier.create(reactiveQueryGateway.subscriptionQuery(true, String.class, String.class))
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
     }
 
     @Test
@@ -704,18 +752,18 @@ class DefaultReactorQueryGatewayTest {
         reactiveQueryGateway
                 .registerDispatchInterceptor(queryMono -> Mono.error(new RuntimeException()));
         StepVerifier.create(reactiveQueryGateway.subscriptionQuery(true, String.class, String.class))
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
     }
 
     @Test
     void testSubscriptionQueryFails() {
         Mono<SubscriptionQueryResult<Integer, Integer>> monoResult = reactiveQueryGateway.subscriptionQuery(6,
-                                                                                                            Integer.class,
-                                                                                                            Integer.class);
+                Integer.class,
+                Integer.class);
         SubscriptionQueryResult<Integer, Integer> result = monoResult.block();
         assertNotNull(result);
         StepVerifier.create(result.initialResult())
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
     }
 
     @Test
@@ -724,12 +772,12 @@ class DefaultReactorQueryGatewayTest {
         doThrow(new RuntimeException(":(")).when(queryBus).subscriptionQuery(any(), any(), anyInt());
 
         Mono<SubscriptionQueryResult<Integer, Integer>> monoResult = reactiveQueryGateway.subscriptionQuery(6,
-                                                                                                            Integer.class,
-                                                                                                            Integer.class)
-                                                                                         .retry(5);
+                        Integer.class,
+                        Integer.class)
+                .retry(5);
 
         StepVerifier.create(monoResult)
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
 
         verify(queryBus, times(6)).subscriptionQuery(any(), any(), anyInt());
     }
@@ -737,13 +785,13 @@ class DefaultReactorQueryGatewayTest {
     @Test
     void testSubscriptionQueryFailsRetryInitialResult() throws Exception {
         Mono<SubscriptionQueryResult<Integer, Integer>> monoResult = reactiveQueryGateway.subscriptionQuery(6,
-                                                                                                            Integer.class,
-                                                                                                            Integer.class);
+                Integer.class,
+                Integer.class);
 
         SubscriptionQueryResult<Integer, Integer> result = monoResult.block();
         assertNotNull(result);
         StepVerifier.create(result.initialResult().retry(5))
-                    .verifyError(RuntimeException.class);
+                .verifyError(RuntimeException.class);
 
         verify(queryMessageHandler3, times(6)).handle(any());
     }
@@ -768,9 +816,9 @@ class DefaultReactorQueryGatewayTest {
             queryUpdateEmitter.complete(String.class, q -> true);
         });
         StepVerifier.create(result.doOnNext(s -> countDownLatch.countDown()))
-                    .expectNext("handled")
-                    .expectNext("1", "2", "3", "4", "5")
-                    .verifyComplete();
+                .expectNext("handled")
+                .expectNext("1", "2", "3", "4", "5")
+                .verifyComplete();
     }
 
     @Test
@@ -787,11 +835,11 @@ class DefaultReactorQueryGatewayTest {
 
             return result;
         }).when(queryBus)
-          .subscriptionQuery(any(), any(), anyInt());
+                .subscriptionQuery(any(), any(), anyInt());
 
         StepVerifier.create(reactiveQueryGateway.queryUpdates("6", String.class))
-                    .expectNext("1", "2", "3", "4", "5")
-                    .verifyComplete();
+                .expectNext("1", "2", "3", "4", "5")
+                .verifyComplete();
     }
 
     @Test
@@ -808,12 +856,15 @@ class DefaultReactorQueryGatewayTest {
 
             return result;
         }).when(queryBus)
-          .subscriptionQuery(any(), any(), anyInt());
+                .subscriptionQuery(any(), any(), anyInt());
 
         StepVerifier.create(reactiveQueryGateway.subscriptionQueryMany(2.3, String.class))
-                    .expectNext("value1", "value2", "value3", "update1", "update2", "update3", "update4", "update5")
-                    .verifyComplete();
+                .expectNext("value1", "value2", "value3", "update1", "update2", "update3", "update4", "update5")
+                .verifyComplete();
     }
 
-    private static class MockException extends RuntimeException{};
+    private static class MockException extends RuntimeException {
+    }
+
+    ;
 }
