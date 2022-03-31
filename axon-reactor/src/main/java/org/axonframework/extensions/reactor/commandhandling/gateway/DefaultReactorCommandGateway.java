@@ -232,7 +232,7 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
          */
         public Builder resultHandlerInterceptors(
                 List<ReactorResultHandlerInterceptor<CommandMessage<?>, CommandResultMessage<?>>> resultHandlerInterceptors) {
-            this.resultInterceptors = resultHandlerInterceptors != null && resultHandlerInterceptors.isEmpty()
+            this.resultInterceptors = resultHandlerInterceptors != null && !resultHandlerInterceptors.isEmpty()
                     ? new CopyOnWriteArrayList<>(resultHandlerInterceptors)
                     : new CopyOnWriteArrayList<>();
             return this;

@@ -256,6 +256,18 @@ class DefaultReactorQueryGatewayTest {
     }
 
     @Test
+    void testQueryWithBuilderDispatchInterceptor() {
+        ReactorQueryGateway reactorQueryGateway = DefaultReactorQueryGateway.builder()
+                .queryBus(queryBus)
+                .dispatchInterceptors(queryMono -> queryMono.map(query -> query.andMetaData(Collections.singletonMap("key1", "value1"))))
+                .build();
+
+        StepVerifier.create(reactorQueryGateway.query(true, String.class))
+                .expectNext("value1")
+                .verifyComplete();
+    }
+
+    @Test
     void testQueryWithErrorDispatchInterceptor() {
         reactiveQueryGateway
                 .registerResultHandlerInterceptor((q, r) -> r.onErrorMap(t -> new MockException()));
