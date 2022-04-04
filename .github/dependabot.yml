@@ -12,9 +12,12 @@ updates:
     - "Status: In Progress"
   # Add reviewers
   reviewers:
-    - "m1l4n54v1c"
-    - "saratry"
-    - "schananas"
+    - "schananas" # Main
+    - "gklijs"
+    - "Morlack"
+    - "sandjelkovic"
+    - "smcvb"
+    - "YvonneCeelie"
   milestone: 3
 - package-ecosystem: maven
   directory: "/"
@@ -28,7 +31,10 @@ updates:
     - "Status: In Progress"
   # Add reviewers
   reviewers:
-    - "m1l4n54v1c"
-    - "saratry"
-    - "schananas"
+    - "schananas" # Main
+    - "gklijs"
+    - "Morlack"
+    - "sandjelkovic"
+    - "smcvb"
+    - "YvonneCeelie"
   milestone: 3
