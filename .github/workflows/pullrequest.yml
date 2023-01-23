@@ -14,7 +14,9 @@ jobs:
             sonar-enabled: false
           - java-version: 11
             sonar-enabled: true
-      fail-fast: false # run both to the end
+          - java-version: 17
+            sonar-enabled: false
+      fail-fast: false # run all to the end
 
     steps:
       - name: Checkout code
@@ -43,7 +45,7 @@ jobs:
       - name: Sonar Analysis
         if: ${{ success() && matrix.sonar-enabled && github.event.pull_request.head.repo.full_name == github.repository }}
         run: |
-          ./mvnw -B -Dstyle.color=always sonar:sonar \          
+          ./mvnw -B -Dstyle.color=always sonar:sonar \
           -Dsonar.projectKey=AxonFramework_extension-reactor \
           -Dsonar.organization=axonframework \
           -Dsonar.host.url=https://sonarcloud.io \
