@@ -62,9 +62,9 @@ class DefaultReactorEventGatewayTest {
         Context context = of(MetaData.class, MetaData.with("k","v"));
 
         Flux<String> result = gateway.publish("event")
-                .map(Message::getPayload)
-                .cast(String.class)
-                .subscriberContext(context);
+                                     .map(Message::getPayload)
+                                     .cast(String.class)
+                                     .contextWrite(c -> context);
 
         StepVerifier.create(result)
                 .expectNext("event")

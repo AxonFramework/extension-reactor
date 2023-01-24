@@ -106,10 +106,10 @@ class DefaultReactorCommandGatewayComponentTest {
 
         Context context = of("k1", "v1");
 
-        StepVerifier.create(result.subscriberContext(context))
+        StepVerifier.create(result.contextWrite(c -> context))
                     .expectNext("handled")
                     .expectAccessibleContext()
-                    .containsOnly(context)
+                    .containsAllOf(context)
                     .then()
                     .verifyComplete();
         verify(commandMessageHandler).handle(any());
@@ -123,12 +123,12 @@ class DefaultReactorCommandGatewayComponentTest {
 
         Context context = of(MetaData.class, MetaData.with("k","v"));
 
-        StepVerifier.create(result.subscriberContext(context))
-                .expectNext("handled")
-                .expectAccessibleContext()
-                .containsOnly(context)
-                .then()
-                .verifyComplete();
+        StepVerifier.create(result.contextWrite(c -> context))
+                    .expectNext("handled")
+                    .expectAccessibleContext()
+                    .containsAllOf(context)
+                    .then()
+                    .verifyComplete();
 
         ArgumentCaptor<CommandMessage> commandMessageCaptor =  ArgumentCaptor.forClass(CommandMessage.class);
 
@@ -221,17 +221,17 @@ class DefaultReactorCommandGatewayComponentTest {
 
         reactiveCommandGateway
                 .registerDispatchInterceptor(cmdMono -> cmdMono
-                        .filterWhen(v -> Mono.subscriberContext()
+                        .filterWhen(v -> Mono.deferContextual(Mono::just)
                                              .filter(it -> it.hasKey("security"))
                                              .map(it -> it.get("security")))
                         .map(cmd -> cmd.andMetaData(Collections.singletonMap("key1", "value1")))
                 );
 
         StepVerifier.create(reactiveCommandGateway.send(true)
-                                                  .subscriberContext(context))
+                                                  .contextWrite(c -> context))
                     .expectNext("value1")
                     .expectAccessibleContext()
-                    .containsOnly(context)
+                    .containsAllOf(context)
                     .then()
                     .verifyComplete();
     }
@@ -242,13 +242,13 @@ class DefaultReactorCommandGatewayComponentTest {
 
         reactiveCommandGateway
                 .registerDispatchInterceptor(cmdMono -> cmdMono
-                        .filterWhen(v -> Mono.subscriberContext()
+                        .filterWhen(v -> Mono.deferContextual(Mono::just)
                                              .filter(it -> it.hasKey("security"))
                                              .map(it -> it.get("security")))
                         .map(cmd -> cmd.andMetaData(Collections.singletonMap("key1", "value1")))
                 );
 
-        StepVerifier.create(reactiveCommandGateway.send(true).subscriberContext(context))
+        StepVerifier.create(reactiveCommandGateway.send(true).contextWrite(c -> context))
                     .expectComplete()
                     .verify();
     }

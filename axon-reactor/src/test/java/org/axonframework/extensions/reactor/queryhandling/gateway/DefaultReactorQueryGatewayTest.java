@@ -146,16 +146,17 @@ class DefaultReactorQueryGatewayTest {
         Context context = of(MetaData.class, MetaData.with("k", "v"));
 
         Mono<String> result = reactiveQueryGateway.query("criteria", String.class)
-                .subscriberContext(context);
+                                                  .contextWrite(c -> context);
+        ;
 
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         StepVerifier.create(result)
-                .expectNext("handled")
-                .expectAccessibleContext()
-                .containsOnly(context)
-                .then()
-                .verifyComplete();
+                    .expectNext("handled")
+                    .expectAccessibleContext()
+                    .containsAllOf(context)
+                    .then()
+                    .verifyComplete();
         verify(queryMessageHandler1).handle(any());
 
         ArgumentCaptor<QueryMessage> queryMessageCaptor = ArgumentCaptor.forClass(QueryMessage.class);
@@ -173,16 +174,17 @@ class DefaultReactorQueryGatewayTest {
     void testCommandSetMetaDataViaContext() throws Exception {
         Context context = Context.of("k1", "v1");
 
-        Mono<String> result = reactiveQueryGateway.query("criteria", String.class).subscriberContext(context);
+        Mono<String> result = reactiveQueryGateway.query("criteria", String.class).contextWrite(c -> context);
+        ;
 
         verifyNoMoreInteractions(queryMessageHandler1);
         verifyNoMoreInteractions(queryMessageHandler2);
         StepVerifier.create(result)
-                .expectNext("handled")
-                .expectAccessibleContext()
-                .containsOnly(context)
-                .then()
-                .verifyComplete();
+                    .expectNext("handled")
+                    .expectAccessibleContext()
+                    .containsAllOf(context)
+                    .then()
+                    .verifyComplete();
         verify(queryMessageHandler1).handle(any());
     }
 
@@ -283,17 +285,17 @@ class DefaultReactorQueryGatewayTest {
 
         reactiveQueryGateway
                 .registerDispatchInterceptor(queryMono -> queryMono
-                        .filterWhen(v -> Mono.subscriberContext()
-                                .filter(ctx -> ctx.hasKey("security"))
-                                .map(ctx -> ctx.get("security")))
+                        .filterWhen(v -> Mono.deferContextual(Mono::just)
+                                             .filter(ctx -> ctx.hasKey("security"))
+                                             .map(ctx -> ctx.get("security")))
                         .map(query -> query.andMetaData(Collections.singletonMap("key1", "value1"))));
 
-        StepVerifier.create(reactiveQueryGateway.query(true, String.class).subscriberContext(context))
-                .expectNext("value1")
-                .expectAccessibleContext()
-                .containsOnly(context)
-                .then()
-                .verifyComplete();
+        StepVerifier.create(reactiveQueryGateway.query(true, String.class).contextWrite(c -> context))
+                    .expectNext("value1")
+                    .expectAccessibleContext()
+                    .containsAllOf(context)
+                    .then()
+                    .verifyComplete();
     }
 
     @Test
