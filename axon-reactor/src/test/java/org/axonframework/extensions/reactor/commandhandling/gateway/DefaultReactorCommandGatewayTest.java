@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010-2023. Axon Framework
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.axonframework.extensions.reactor.commandhandling.gateway;
 
 import org.axonframework.commandhandling.CommandMessage;
@@ -82,14 +98,14 @@ class DefaultReactorCommandGatewayTest {
     @Test
     void testBuilderResultFiltering() {
         ReactorCommandGateway reactorCommandGateway = DefaultReactorCommandGateway.builder()
-                .commandBus(commandBus)
-                .resultHandlerInterceptors((message, results) -> results.filter(result -> result.getMetaData().containsKey("K")))
-                .build();
+                                                                                  .commandBus(commandBus)
+                                                                                  .resultHandlerInterceptors((message, results) -> results.filter(result -> result.getMetaData().containsKey("K")))
+                                                                                  .build();
         // int 1 -> flux of results is filtered
 
         Mono<CommandResultMessage<?>> results = reactorCommandGateway.send("");
         StepVerifier.create(results)
-                .verifyComplete();
+                    .verifyComplete();
         // verify -> command has been sent
         assertEquals(1, commandBus.numberOfSentCommands());
     }
@@ -180,10 +196,10 @@ class DefaultReactorCommandGatewayTest {
     @Test
     void testResultOnErrorMapping() {
         commandBus = new CommandBusStub(GenericCommandResultMessage
-                .asCommandResultMessage(new RuntimeException("oops")));
+                                                .asCommandResultMessage(new RuntimeException("oops")));
         gateway = DefaultReactorCommandGateway.builder()
-                .commandBus(commandBus)
-                .build();
+                                              .commandBus(commandBus)
+                                              .build();
 
         gateway.registerResultHandlerInterceptor((command, results) -> results
                 .onErrorMap(t -> new MockException()));
@@ -191,8 +207,8 @@ class DefaultReactorCommandGatewayTest {
         Mono<String> result = gateway.send("");
 
         StepVerifier.create(result)
-                .expectError(MockException.class)
-                .verify();
+                    .expectError(MockException.class)
+                    .verify();
     }
 
     @Test

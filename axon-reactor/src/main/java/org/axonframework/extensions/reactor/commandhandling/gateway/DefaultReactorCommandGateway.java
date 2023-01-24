@@ -1,3 +1,19 @@
+/*
+ * Copyright (c) 2010-2023. Axon Framework
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.axonframework.extensions.reactor.commandhandling.gateway;
 
 import org.axonframework.commandhandling.*;
@@ -79,9 +95,9 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
 
     private Mono<CommandMessage<?>> createCommandMessage(Object command) {
         return Mono.just(command)
-                .transformDeferredContextual((commandMono, contextView) ->
-                        commandMono.map(c -> GenericCommandMessage.asCommandMessage(c)
-                                .andMetaData(metaDataFromContext(contextView))));
+                   .transformDeferredContextual((commandMono, contextView) ->
+                                                        commandMono.map(c -> GenericCommandMessage.asCommandMessage(c)
+                                                                                                  .andMetaData(metaDataFromContext(contextView))));
     }
 
     private MetaData metaDataFromContext(ContextView contextView) {
@@ -103,8 +119,8 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
 
     private Mono<CommandMessage<?>> processCommandInterceptors(Mono<CommandMessage<?>> commandMessage) {
         return Flux.fromIterable(dispatchInterceptors)
-                .reduce(commandMessage, (command, interceptor) -> interceptor.intercept(command))
-                .flatMap(Function.identity());
+                   .reduce(commandMessage, (command, interceptor) -> interceptor.intercept(command))
+                   .flatMap(Function.identity());
     }
 
     private <C, R> Mono<Tuple2<CommandMessage<C>, Flux<CommandResultMessage<? extends R>>>> dispatchCommand(
@@ -124,12 +140,12 @@ public class DefaultReactorCommandGateway implements ReactorCommandGateway {
             Tuple2<CommandMessage<C>, Flux<CommandResultMessage<?>>> commandWithResults) {
         CommandMessage<?> commandMessage = commandWithResults.getT1();
         Flux<CommandResultMessage<?>> commandResultMessages = commandWithResults.getT2()
-                .flatMapSequential(this::mapExceptionalResult);
+                                                                                .flatMapSequential(this::mapExceptionalResult);
 
         return Flux.fromIterable(resultInterceptors)
-                .reduce(commandResultMessages,
-                        (result, interceptor) -> interceptor.intercept(commandMessage, result))
-                .flatMap(Flux::next); // command handlers provide only one result!
+                   .reduce(commandResultMessages,
+                           (result, interceptor) -> interceptor.intercept(commandMessage, result))
+                   .flatMap(Flux::next); // command handlers provide only one result!
     }
 
     private <R> Mono<R> getPayload(Mono<? extends CommandResultMessage<?>> commandResultMessage) {
