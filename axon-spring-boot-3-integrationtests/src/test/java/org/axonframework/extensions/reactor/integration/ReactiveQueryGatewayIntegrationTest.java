@@ -60,7 +60,6 @@ class ReactiveQueryGatewayIntegrationTest {
     void reactorQueryGatewayIsAvailable() {
         testApplicationContext
                 .withPropertyValues("axon.axonserver.enabled=false")
-                .withPropertyValues()
                 .withUserConfiguration(DefaultContext.class)
                 .withPropertyValues()
                 .run(context -> {
