@@ -76,8 +76,8 @@ class ReactiveEventGatewayIntegrationTest {
 
         @Bean
         EventBus eventBus(Configuration configuration) {
-            return spy(SimpleEventBus.builder().
-                                     messageMonitor(configuration.messageMonitor(EventStore.class, "eventStore"))
+            return spy(SimpleEventBus.builder()
+                                     .messageMonitor(configuration.messageMonitor(EventStore.class, "eventStore"))
                                      .spanFactory(configuration.spanFactory())
                                      .build());
         }
