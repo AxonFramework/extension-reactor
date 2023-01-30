@@ -29,7 +29,7 @@
     <artifactId>axon-spring-boot-3-integrationtests</artifactId>
     <groupId>org.axonframework.extensions.reactor</groupId>
 
-    <name>Axon Framework Mongo Extension Spring Boot 3 Integration Tests</name>
+    <name>Axon Framework Reactor Extension Spring Boot 3 Integration Tests</name>
     <description>
         Module used to test the integration with Spring Boot 3
     </description>
