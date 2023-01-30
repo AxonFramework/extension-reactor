@@ -25,6 +25,7 @@ import org.axonframework.extensions.reactor.eventhandling.gateway.ReactorEventGa
 import org.axonframework.extensions.reactor.queryhandling.gateway.DefaultReactorQueryGateway;
 import org.axonframework.extensions.reactor.queryhandling.gateway.ReactorQueryGateway;
 import org.axonframework.queryhandling.QueryBus;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -35,6 +36,7 @@ import org.springframework.context.annotation.Bean;
  * @author Milan Savic
  * @since 4.4.2
  */
+@AutoConfiguration
 @ConditionalOnClass(name = "reactor.core.publisher.Mono")
 public class ReactorAutoConfiguration {
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ~ Copyright (c) 2010-2022. Axon Framework
+  ~ Copyright (c) 2010-2023. Axon Framework
   ~
   ~ Licensed under the Apache License, Version 2.0 (the "License");
   ~ you may not use this file except in compliance with the License.
@@ -81,10 +81,17 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
-                            <Automatic-Module-Name>org.axonframework.extensions.jgroups</Automatic-Module-Name>
+                            <Automatic-Module-Name>org.axonframework.extensions.reactor</Automatic-Module-Name>
                         </manifestEntries>
                     </archive>
                 </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>test-jar</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
