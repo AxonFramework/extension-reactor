@@ -50,7 +50,7 @@
         </dependency>
         <dependency>
             <groupId>org.axonframework.extensions.reactor</groupId>
-            <artifactId>axon-spring-boot-3-integrationtests</artifactId>
+            <artifactId>axon-reactor-spring-boot-3-integrationtests</artifactId>
             <version>${project.version}</version>
             <scope>runtime</scope>
         </dependency>
