@@ -63,7 +63,7 @@
         <log4j.version>2.13.0</log4j.version>
         <jacoco-maven-plugin.version>0.8.9</jacoco-maven-plugin.version>
 
-        <junit.jupiter.version>5.9.0</junit.jupiter.version>
+        <junit.jupiter.version>5.9.2</junit.jupiter.version>
         <mockito.version>4.11.0</mockito.version>
     </properties>
 
