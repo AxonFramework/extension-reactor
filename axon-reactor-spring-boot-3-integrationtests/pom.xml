@@ -37,12 +37,16 @@
 
     <packaging>jar</packaging>
 
+    <properties>
+        <axon.version>4.8.0</axon.version>
+    </properties>
+
     <dependencies>
         <!-- Axon -->
         <dependency>
             <groupId>org.axonframework</groupId>
             <artifactId>axon-spring-boot-autoconfigure</artifactId>
-            <version>4.8.0</version>
+            <version>${axon.version}</version>
         </dependency>
         <dependency>
             <groupId>org.axonframework.extensions.reactor</groupId>
