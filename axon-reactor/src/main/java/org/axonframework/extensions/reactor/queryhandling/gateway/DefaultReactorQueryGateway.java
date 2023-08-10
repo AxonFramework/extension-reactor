@@ -20,6 +20,7 @@ import org.axonframework.common.AxonConfigurationException;
 import org.axonframework.common.Registration;
 import org.axonframework.extensions.reactor.messaging.ReactorMessageDispatchInterceptor;
 import org.axonframework.extensions.reactor.messaging.ReactorResultHandlerInterceptor;
+import org.axonframework.messaging.GenericMessage;
 import org.axonframework.messaging.MetaData;
 import org.axonframework.messaging.ResultMessage;
 import org.axonframework.messaging.responsetypes.ResponseType;
@@ -165,9 +166,9 @@ public class DefaultReactorQueryGateway implements ReactorQueryGateway {
                                                                            int updateBufferSize) {
 
         //noinspection unchecked
-        return Mono.<QueryMessage<?, ?>>fromCallable(() -> new GenericSubscriptionQueryMessage<>(query,
-                                                                                                 initialResponseType,
-                                                                                                 updateResponseType))
+        return Mono.<QueryMessage<?, ?>>fromCallable(() -> new GenericSubscriptionQueryMessage<>(
+                           GenericMessage.asMessage(query), queryName, initialResponseType, updateResponseType)
+                   )
                    .transform(this::processDispatchInterceptors)
                    .map(interceptedQuery -> (SubscriptionQueryMessage<Q, U, I>) interceptedQuery)
                    .flatMap(isq -> dispatchSubscriptionQuery(isq, backpressure, updateBufferSize))

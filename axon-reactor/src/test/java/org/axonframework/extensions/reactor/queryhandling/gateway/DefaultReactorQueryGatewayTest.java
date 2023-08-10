@@ -25,6 +25,7 @@ import org.axonframework.messaging.responsetypes.ResponseTypes;
 import org.axonframework.queryhandling.GenericQueryMessage;
 import org.axonframework.queryhandling.GenericQueryResponseMessage;
 import org.axonframework.queryhandling.GenericSubscriptionQueryMessage;
+import org.axonframework.queryhandling.QueryBus;
 import org.axonframework.queryhandling.QueryMessage;
 import org.axonframework.queryhandling.QueryUpdateEmitter;
 import org.axonframework.queryhandling.SimpleQueryBus;
@@ -64,7 +65,7 @@ import static reactor.util.context.Context.of;
  */
 class DefaultReactorQueryGatewayTest {
 
-    private SimpleQueryBus queryBus;
+    private QueryBus queryBus;
     private QueryUpdateEmitter queryUpdateEmitter;
 
     private MessageHandler<QueryMessage<?, Object>> queryMessageHandler1;
@@ -440,8 +441,9 @@ class DefaultReactorQueryGatewayTest {
     void scatterGatherReturningNull() {
         assertNull(testSubject.scatterGather(0L, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1))
                               .blockFirst());
-        StepVerifier.create(testSubject
-                                    .scatterGather(0L, ResponseTypes.instanceOf(String.class), Duration.ofSeconds(1)))
+        StepVerifier.create(testSubject.scatterGather(0L,
+                                                      ResponseTypes.instanceOf(String.class),
+                                                      Duration.ofSeconds(1)))
                     .expectNext()
                     .verifyComplete();
     }
@@ -899,6 +901,32 @@ class DefaultReactorQueryGatewayTest {
         StepVerifier.create(testSubject.subscriptionQueryMany(2.3, String.class))
                     .expectNext("value1", "value2", "value3", "update1", "update2", "update3", "update4", "update5")
                     .verifyComplete();
+    }
+
+    @Test
+    void dispatchSubscriptionQueryWithMetaDataByProvidingMessageInstanceAsPayload() throws Exception {
+        ResponseType<String> responseType = ResponseTypes.instanceOf(String.class);
+        GenericSubscriptionQueryMessage<String, String, String> testQuery =
+                new GenericSubscriptionQueryMessage<>("criteria", responseType, responseType)
+                        .withMetaData(MetaData.with("key", "value"));
+
+        Mono<SubscriptionQueryResult<String, String>> monoResult =
+                testSubject.subscriptionQuery(testQuery, String.class, String.class);
+
+        verifyNoMoreInteractions(queryMessageHandler1);
+        verifyNoMoreInteractions(queryMessageHandler2);
+
+        SubscriptionQueryResult<String, String> result = monoResult.block();
+        assertNotNull(result);
+        StepVerifier.create(result.initialResult())
+                    .expectNext("handled")
+                    .verifyComplete();
+
+        verify(queryBus).subscriptionQuery(
+                argThat(subscriptionQuery -> "value".equals(subscriptionQuery.getMetaData().get("key"))),
+                any(),
+                anyInt()
+        );
     }
 
     private static class MockException extends RuntimeException {
