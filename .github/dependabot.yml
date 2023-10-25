@@ -13,7 +13,7 @@ updates:
     - "gklijs"
     - "schananas"
     - "smcvb"
-  milestone: 8
+  milestone: 9
 - package-ecosystem: maven
   directory: "/"
   schedule:
@@ -27,4 +27,4 @@ updates:
     - "gklijs"
     - "schananas"
     - "smcvb"
-  milestone: 8
+  milestone: 9
