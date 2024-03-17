@@ -52,9 +52,9 @@
         </sonar.coverage.jacoco.xmlReportPaths>
 
         <axon.version>4.9.0</axon.version>
-        <projectreactor.version>3.6.2</projectreactor.version>
+        <projectreactor.version>3.6.4</projectreactor.version>
 
-        <spring.version>5.3.32</spring.version>
+        <spring.version>5.3.33</spring.version>
         <spring.boot.version>2.7.18</spring.boot.version>
 
         <slf4j.version>1.7.28</slf4j.version>
@@ -64,12 +64,12 @@
         <mockito.version>4.11.0</mockito.version>
 
         <jacoco-maven.version>0.8.11</jacoco-maven.version>
-        <maven-assembly.version>3.6.0</maven-assembly.version>
+        <maven-assembly.version>3.7.0</maven-assembly.version>
         <maven-clean.version>3.3.2</maven-clean.version>
         <maven-compiler.version>3.12.1</maven-compiler.version>
         <maven-deploy.version>3.0.0</maven-deploy.version>
         <maven-enforcer.version>3.4.1</maven-enforcer.version>
-        <maven-gpg.version>3.1.0</maven-gpg.version>
+        <maven-gpg.version>3.2.0</maven-gpg.version>
         <maven-install.version>3.1.1</maven-install.version>
         <maven-jar.version>3.3.0</maven-jar.version>
         <maven-javadoc.version>3.6.3</maven-javadoc.version>
