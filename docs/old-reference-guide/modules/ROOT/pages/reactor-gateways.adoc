@@ -1,0 +1,404 @@
+:navtitle: Reactor Gateways
+= Reactor Gateways
+
+The "Reactive Gateways" offer a reactive API wrapper around the command, query and event bus. Most of the operations are similar to those from non-reactive gateways, simply replacing the `CompletableFuture` with either a `Mono` or `Flux`. In some cases, the API is expended to ease use of common reactive patterns.
+
+WARNING: Reactor doesn't allow `null` values in streams. Any `null` value returned from the handler will be mapped to link:https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html#empty[`Mono#empty()`,window=_blank,role=external].
+
+[NOTE]
+.Retrying operations
+====
+All operations support Reactor's retry mechanism:
+
+[source,java]
+----
+reactiveQueryGateway.query(query, ResponseType.class).retry(5);
+----
+This call will retry sending the query a maximum of five times when it fails.
+====
+
+== Configuration in SpringBoot
+
+This extension can be added as a Spring Boot starter dependency to your project using group id `org.axonframework.extensions.reactor` and artifact id `axon-reactor-spring-boot-starter`. The implementation of the extension can be found link:https://github.com/AxonFramework/extension-reactor[here,window=_blank,role=external].
+
+== Reactor command gateway
+
+This section describes the methods on the `ReactorCommandGateway`.
+
+[[send]]
+=== `send`
+Sends the given command once the caller subscribes to the command result. Returns immediately.
+
+A common pattern is using the REST API to send a command. In this case it is recommend to for example use link:https://docs.spring.io/spring-framework/docs/5.0.0.BUILD-SNAPSHOT/spring-framework-reference/html/web-reactive.html[WebFlux,window=_blank,role=external], and return the command result `Mono` directly to the controller:
+
+[source,java]
+.Sending a command from a Spring WebFlux Controller.
+----
+class SpringCommandController {
+
+    private final ReactorCommandGateway reactiveCommandGateway;
+
+    @PostMapping
+    public Mono<CommandHandlerResponseBody> sendCommand(@RequestBody CommandBody command) {
+        return reactiveCommandGateway.send(command);
+    }
+}
+----
+
+WARNING: If the command handling function returns type `void`, `Mono<CommandHandlerResponseBody>` should be replaced with `Mono<Void>`
+
+Another common pattern is "send and forget":
+
+[source,java]
+.Function that sends a command and returns immediately without waiting for the result.
+----
+class CommandDispatcher {
+
+    private final ReactorCommandGateway reactiveCommandGateway;
+
+    public void sendAndForget(MyCommand command) {
+         reactiveCommandGateway.send(command)
+                               .subscribe();
+    }
+}
+----
+
+[[sendall]]
+=== `sendAll`
+
+This method uses the given `Publisher` of commands to dispatch incoming commands.
+
+WARNING: This operation is available only in the Reactor extension. Use it to connect third-party streams that delivers commands.
+
+[source,java]
+.Connects an external input stream directly to the Reactor Command Gateway.
+----
+class CommandPublisher {
+
+    private final ReactorCommandGateway reactiveCommandGateway;
+
+    @PostConstruct
+    public void startReceivingCommands(Flux<CommandBody> inputStream) {
+        reactiveCommandGateway.sendAll(inputStream)
+                              .subscribe();
+    }
+}
+----
+
+NOTE: The sendAll operation will keep sending commands until the input stream is canceled.
+
+WARNING: `send` and `sendAll` do not offer _any_ backpressure, yet. The only backpressure mechanism in place is that commands will be sent sequentially; thus once the result of a previous command arrives. The number of commands is prefetched from an incoming stream and stored in a buffer for sending (see link:https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Flux.html#concatMap[`Flux#concatMap`,window=_blank,role=external]). *This slows down sending*, but does not guarantee that the `Subscriber` will not be overwhelmed with commands if they are sent too fast.
+
+== Reactor query gateway
+
+[[query]]
+=== `query`
+
+Sends the given `query`, expecting a response in the form of `responseType` from a single source.
+
+[source,java]
+.Recommended way of using the Reactor query gateway within a Spring REST controller.
+----
+class SpringQueryController {
+
+    private final ReactorQueryGateway reactiveQueryGateway;
+
+    // The query's Mono is returned to the Spring controller. Subscribe control is given to Spring Framework.
+    @GetMapping
+    public Mono<SomeResponseType> findAll(FindAllQuery query, Class<SomeResponseType> responseType) {
+        return reactiveQueryGateway.query(query, responseType);
+    }
+}
+----
+
+[[scattergather]]
+=== `scatterGather`
+Sends the given `query`, expecting a response in the form of `responseType` from several sources within a specified `duration`.
+
+[source,java]
+.Sends a given query that stops after receiving three results, or after 5 seconds.
+----
+class SpringQueryController {
+
+    private final ReactorQueryGateway reactiveQueryGateway;
+
+    @GetMapping
+    public Flux<SomeResponseType> findMany(FindManyQuery query) {
+        return reactiveQueryGateway.scatterGather(query, SomeResponseType.class, Duration.ofSeconds(5)).take(3);
+    }
+}
+----
+
+=== Subscription queries
+
+Firstly, the Reactor API for subscription queries in Axon is not new.
+
+However, we noticed several patterns which are often used, such as:
+
+- Concatenating initial results with query updates in a single stream, or
+- skipping the initial result all together.
+
+As such, the Reactor Extension provides several methods to ease usage of these common patterns.
+
+[[subscriptionquery]]
+==== `subscriptionQuery`
+Sends the given `query`, returns the initial result and keeps streaming incremental updates until a subscriber unsubscribes from the `Flux`.
+
+Note that this method should be used when the response type of the initial result and incremental update match.
+
+[source,java]
+----
+Flux<ResultType> resultFlux = reactiveQueryGateway.subscriptionQuery("criteriaQuery", ResultType.class);
+----
+
+The above invocation through the `ReactorQueryGateway` is equivalent to:
+
+[source,java]
+----
+class SubscriptionQuerySender {
+
+    private final ReactorQueryGateway reactiveQueryGateway;
+
+    public Flux<SomeResponseType> sendSubscriptionQuery(SomeQuery query, Class<SomeResponseType> responseType) {
+        return reactiveQueryGateway.subscriptionQuery(query, responseType, responseType)
+                                   .flatMapMany(result -> result.initialResult()
+                                                                .concatWith(result.updates())
+                                                                .doFinally(signal -> result.close()));
+    }
+}
+----
+
+[[subscriptionquerymany]]
+==== `subscriptionQueryMany`
+
+Sends the given `query`, returns the initial result and keeps streaming incremental updates until a subscriber unsubscribes from the `Flux`.
+
+This operation should be used when the initial result contains multiple instances of the response type which needs to be flattened. Additionally, the response type of the initial response and incremental updates need to match.
+
+[source,java]
+----
+Flux<ResultType> resultFlux = reactiveQueryGateway.subscriptionQueryMany("criteriaQuery", ResultType.class);
+----
+
+The above invocation through the `ReactorQueryGateway` is equivalent to:
+
+[source,java]
+----
+class SubscriptionQuerySender {
+
+    private final ReactorQueryGateway reactiveQueryGateway;
+
+    public Flux<SomeResponseType> sendSubscriptionQuery(SomeQuery query, Class<SomeResponseType> responseType) {
+        return reactiveQueryGateway.subscriptionQuery(query,
+                                                      ResponseTypes.multipleInstancesOf(responseType),
+                                                      ResponseTypes.instanceOf(responseType))
+                                   .flatMapMany(result -> result.initialResult()
+                                                                .flatMapMany(Flux::fromIterable)
+                                                                .concatWith(result.updates())
+                                                                .doFinally(signal -> result.close()));
+    }
+}
+----
+
+[[queryupdated]]
+==== `queryUpdates`
+Sends the given `query` and streams incremental updates until a subscriber unsubscribes from the `Flux`.
+
+This method could be used when subscriber is only interested in updates.
+
+[source,java]
+----
+Flux<ResultType> updatesOnly = reactiveQueryGateway.queryUpdates("criteriaQuery", ResultType.class);
+----
+
+The above invocation through the ReactorQueryGateway is equivalent to:
+
+[source,java]
+----
+class SubscriptionQuerySender {
+
+    private final ReactorQueryGateway reactiveQueryGateway;
+
+    public Flux<SomeResponseType> sendSubscriptionQuery(SomeQuery query, Class<SomeResponseType> responseType) {
+        return reactiveQueryGateway.subscriptionQuery(query, ResponseTypes.instanceOf(Void.class), responseType)
+                                   .flatMapMany(result -> result.updates()
+                                                                .doFinally(signal -> result.close()));
+    }
+}
+----
+
+WARNING: In the above shown methods, the subscription query is closed automatically after a subscriber has unsubscribed from the `Flux`. When using the regular `QueryGateway`, the subscription query needs to be closed manually however.
+
+== Reactor event gateway
+
+Reactive variation of the `EventGateway`. Provides support for reactive return types such as `Flux`.
+
+[[publish]]
+=== `publish`
+Publishes the given `events` once the caller subscribes to the resulting `Flux`.
+
+This method returns events that were published. Note that the returned events may be different from those the user has published, granted an xref:_interceptors[interceptor] has been registered which modifies events.
+
+[source,java]
+.Example of dispatcher modified events, returned to user as the result `Flux`.
+----
+class EventPublisher {
+
+    private final ReactorEventGateway reactiveEventGateway;
+
+    // Register a dispatch interceptor to modify the event messages
+    public EventPublisher() {
+        reactiveEventGateway.registerDispatchInterceptor(
+            eventMono -> eventMono.map(event -> GenericEventMessage.asEventMessage("intercepted" + event.getPayload()))
+        );
+    }
+
+    public void publishEvent() {
+        Flux<Object> result = reactiveEventGateway.publish("event");
+    }
+}
+----
+
+== Interceptors
+
+Axon provides a notion of xref:axon_framework_old_ref:messaging-concepts:message-intercepting.adoc[interceptors]. The Reactor gateways allow for similar interceptor logic, namely the `ReactorMessageDispatchInterceptor` and `ReactorResultHandlerInterceptor`.
+
+These interceptors allow us to centrally define rules and filters that will be applied to a message stream.
+
+NOTE: Interceptors will be applied in order they have been registered to the given component.
+
+=== React dispatch interceptors
+
+The `ReactorMessageDispatchInterceptor` should be used to centrally apply rules and validations for outgoing messages. Note that a `ReactorMessageDispatchInterceptor` is an implementation of the default `MessageDispatchInterceptor` interface used throughout the framework. The implementation of this interface is described as follows:
+
+[source,java]
+----
+@FunctionalInterface
+public interface ReactorMessageDispatchInterceptor<M extends Message<?>> extends MessageDispatchInterceptor<M> {
+
+    Mono<M> intercept(Mono<M> message);
+
+    @Override
+    default BiFunction<Integer, M, M> handle(List<? extends M> messages) {
+        return (position, message) -> intercept(Mono.just(message)).block();
+    }
+}
+----
+
+It thus defaults the `MessageDispatchInterceptor#handle(List<? extends M>` method to utilize the `ReactorMessageDispatchInterceptor#intercept(Mono<M>`) method. As such, a `ReactorMessageDispatchInterceptor` could thus be configured on a plain Axon gateway too. Here are a couple of examples how a message dispatch interceptor could be used:
+
+[source,java]
+.Dispatch interceptor that adds key-value pairs to the message's `MetaData`.
+----
+class ReactorConfiguration {
+
+    public void registerDispatchInterceptor(ReactorCommandGateway reactiveGateway) {
+        reactiveGateway.registerDispatchInterceptor(
+            msgMono -> msgMono.map(msg -> msg.andMetaData(Collections.singletonMap("key1", "value1")))
+        );
+    }
+}
+----
+
+[source,java]
+.Dispatch interceptor that discards the message, based on a security flag in the Reactor Context.
+----
+class ReactorConfiguration {
+
+    public void registerDispatchInterceptor(ReactorEventGateway reactiveGateway) {
+        reactiveGateway.registerDispatchInterceptor(
+            msgMono -> msgMono.filterWhen(v -> Mono.subscriberContext()
+                              .filter(ctx-> ctx.hasKey("security"))
+                              .map(ctx->ctx.get("security")))
+        );
+    }
+}
+----
+
+=== Reactor result handler interceptors
+
+The `ReactorResultHandlerInterceptor` should be used to centrally apply rules and validations for incoming messages, a.k.a. results. The implementation of this interface is described as follows:
+
+[source,java]
+----
+@FunctionalInterface
+public interface ReactorResultHandlerInterceptor<M extends Message<?>, R extends ResultMessage<?>> {
+
+    Flux<R> intercept(M message, Flux<R> results);
+}
+----
+
+The parameters are the `message` that has been sent, and a `Flux` of `results` from that message, which is going to be intercepted. The `message` parameter can be useful if you want to apply a given result rule only for specific messages. Here are a couple of examples how a message result interceptor could be used:
+
+NOTE: This type of interceptor is available _only_ in the Reactor Extension.
+
+[source,java]
+.Result interceptor which discards all results that have a payload matching `blockedPayload`
+----
+class ReactorConfiguration {
+
+    public void registerResultInterceptor(ReactorQueryGateway reactiveGateway) {
+        reactiveGateway.registerResultHandlerInterceptor(
+            (msg, results) -> results.filter(r -> !r.getPayload().equals("blockedPayload"))
+        );
+    }
+}
+----
+
+[source,java]
+.Result interceptor which validates that the query result does not contain an empty `String`.
+----
+class ReactorConfiguration {
+
+    public void registerResultInterceptor(ReactorQueryGateway reactiveGateway) {
+        reactiveQueryGateway.registerResultHandlerInterceptor(
+            (query, results) -> results.flatMap(r -> {
+                if (r.getPayload().equals("")) {
+                    return Flux.<ResultMessage<?>>error(new RuntimeException("no empty strings allowed"));
+                } else {
+                    return Flux.just(r);
+                }
+            })
+        );
+    }
+}
+----
+
+[source,java]
+.Result interceptor which discards all results where the `queryName` matches `myBlockedQuery`.
+----
+class ReactorConfiguration {
+
+    public void registerResultInterceptor(ReactorQueryGateway reactiveGateway) {
+        reactiveQueryGateway.registerResultHandlerInterceptor(
+            (q, results) -> results.filter(it -> !((boolean) q.getQueryName().equals("myBlockedQuery")))
+        );
+    }
+}
+----
+
+[source,java]
+.Result interceptor which limits the result waiting time to thirty seconds per message.
+----
+class ReactorConfiguration {
+
+    public void registerResultInterceptor(ReactorCommandGateway reactiveGateway) {
+        reactiveGateway.registerResultHandlerInterceptor(
+            (msg,results) -> results.timeout(Duration.ofSeconds(30))
+        );
+    }
+}
+----
+
+[source,java]
+.Result interceptor which limits the number of results to five entries, and logs all results.
+----
+class ReactorConfiguration {
+
+    public void registerResultInterceptor(ReactorCommandGateway reactiveGateway) {
+        reactiveGateway.registerResultHandlerInterceptor(
+            (msg,results) -> results.log().take(5)
+        );
+    }
+}
+----
