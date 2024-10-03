@@ -1,0 +1,14 @@
+name: reactor-extension-reference
+title: Reactor Extension Reference
+version: true
+prerelease: true
+start_page: ROOT:index.adoc
+
+asciidoc:
+  attributes:
+    component_description: Extension providing Axon Framework-specific infrastructure components using the Project Reactor API
+    type: extension-reference
+    group: axon-framework
+
+nav:
+  - modules/nav.adoc
