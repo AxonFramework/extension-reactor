@@ -4,7 +4,7 @@ This folder contains the docs related to the Reactor Extension for Axon Framewor
 
 The following are the current documentation sources (folders):
 
-- `extension-guide` : [The Reactor Extension Guide](https://library.axoniq.io/reactor_extension_guide/index.html)
+- `extension-guide` : [The Reactor Extension Guide](https://library.axoniq.io/reactor-extension-reference/index.html)
 
 ## Contributing to the docs.
 

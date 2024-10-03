@@ -1,6 +1,6 @@
 site:
   title: Reactor Extension docs PREVIEW
-  start_page: reactor_extension_guide::index.adoc
+  start_page: reactor-extension-reference::index.adoc
 
 content:
   sources:
