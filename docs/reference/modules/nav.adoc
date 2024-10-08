@@ -1,2 +1,3 @@
 * xref::index.adoc[]
 ** xref::reactor-gateways.adoc[]
+* xref::release-notes.adoc[]
