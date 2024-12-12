@@ -40,3 +40,10 @@ updates:
           - "patch"
           - "minor"
           - "major"
+    ignore:
+      - dependency-name: "org.mockito:*"
+        versions: [ "[5.0.0,)" ]
+      - dependency-name: "org.springframework:*"
+        versions: [ "[6.0.0,)" ]
+      - dependency-name: "org.springframework.boot:*"
+        versions: [ "[3.0.0,)" ]
