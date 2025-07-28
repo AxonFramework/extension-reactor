@@ -261,7 +261,7 @@ class EventPublisher {
 
 == Interceptors
 
-Axon provides a notion of xref:axon-framework-reference:messaging-concepts:message-intercepting.adoc[interceptors]. The Reactor gateways allow for similar interceptor logic, namely the `ReactorMessageDispatchInterceptor` and `ReactorResultHandlerInterceptor`.
+Axon provides a notion of interceptors. The Reactor gateways allow for similar interceptor logic, namely the `ReactorMessageDispatchInterceptor` and `ReactorResultHandlerInterceptor`.
 
 These interceptors allow us to centrally define rules and filters that will be applied to a message stream.
 
