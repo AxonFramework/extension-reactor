@@ -26,7 +26,7 @@
 
     <groupId>org.axonframework.extensions.reactor</groupId>
     <artifactId>axon-reactor-spring-boot-starter</artifactId>
-    <version>4.12.0</version>
+    <version>4.12.1-SNAPSHOT</version>
 
     <name>Axon Framework Reactor Extension - Spring Boot Starter</name>
     <description>
@@ -151,7 +151,7 @@
         <connection>scm:git:git://github.com/AxonFramework/extension-reactor.git</connection>
         <developerConnection>scm:git:git@github.com:AxonFramework/extension-reactor.git</developerConnection>
         <url>https://github.com/AxonFramework/extension-reactor</url>
-        <tag>axon-reactor-4.12.0</tag>
+        <tag>HEAD</tag>
     </scm>
 
 </project>
