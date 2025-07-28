@@ -4,6 +4,12 @@
 You can find the release notes for the Reactor Extension of version 4.10.0 below.
 For earlier releases, please go to the link:https://legacydocs.axoniq.io/reference-guide/release-notes/rn-extensions/rn-reactor[legacy documentation].
 
+== Release 4.12.0
+
+Upgrades the Reactor Extension to be compatible with Axon Framework 4.12.0, and updates various dependencies.
+
+See the link:https://github.com/AxonFramework/extension-reactor/releases/tag/axon-reactor-4.12.0[GitHub release notes] for an exhaustive list of all changes.
+
 == Release 4.11.0
 
 Upgrades the Reactor Extension to be compatible with Axon Framework 4.11.0, and updates various dependencies.
