@@ -1,7 +1,13 @@
+> [!IMPORTANT]
+> ## 📦 This repository is archived
+>
+> The Reactor extension has moved into **Axon Framework** and is no longer maintained here.
+> Please use the new location for the latest releases, issues and pull requests:
+>
+> - 💻 **Source code:** [`axon-reactor` module in Axon Framework](https://github.com/AxonIQ/AxonFramework/tree/main/extensions/reactor)
+> - 📚 **Documentation:** - can be found [here](https://docs.axoniq.io/axon-framework-reference/latest/extensions/reactor/)
+
 # Axon Framework - Reactor Extension
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/org.axonframework.extensions.reactor/axon-reactor/badge.svg)](https://maven-badges.herokuapp.com/maven-central/org.axonframework.extensions.reactor/axon-reactor/)
-![Build Status](https://github.com/AxonFramework/extension-reactor/workflows/Reactor%20Extension/badge.svg?branch=master)
-[![SonarCloud Status](https://sonarcloud.io/api/project_badges/measure?project=AxonFramework_extension-reactor&metric=alert_status)](https://sonarcloud.io/dashboard?id=AxonFramework_extension-reactor)
 
 Axon Framework is a framework for building evolutionary, event-driven microservice systems,
  based on the principles of Domain Driven Design, Command-Query Responsibility Segregation (CQRS) and Event Sourcing.
